@@ -198,16 +198,6 @@ export function HomeScreen() {
           </View>
         )}
 
-        {/* SLOT: Check-in prompt */}
-        {showCheckIn && (
-          <View style={styles.checkInSlot}>
-            <CheckIn
-              onComplete={handleCheckInComplete}
-              onDismiss={() => setShowCheckIn(false)}
-            />
-          </View>
-        )}
-
         {/* SLOT: Meal Cards - Breakfast */}
         <MealCardSlot
           label="Breakfast"
@@ -240,6 +230,16 @@ export function HomeScreen() {
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
         />
+
+        {/* SLOT: Check-in prompt */}
+        {showCheckIn && (
+          <View style={styles.checkInSlot}>
+            <CheckIn
+              onComplete={handleCheckInComplete}
+              onDismiss={() => setShowCheckIn(false)}
+            />
+          </View>
+        )}
 
         {/* Daily summary */}
         <View style={styles.summary}>

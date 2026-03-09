@@ -9,7 +9,7 @@ import {
   Dimensions,
   Animated,
 } from "react-native";
-import { K } from "../constants/colors";
+import { K, MetabolicType } from "../constants/colors";
 import { typography, spacing, radius } from "../constants/typography";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -37,13 +37,14 @@ const FEEDBACK_TAGS = [
 
 interface MealCardProps {
   meal: Meal;
+  metabolicType?: MetabolicType;
   onPress?: () => void;
   onFeedback?: (feedback: "up" | "down", tags?: string[]) => void;
   onChatPress?: () => void;
   onRecipePress?: () => void;
 }
 
-export function MealCard({ meal, onPress, onFeedback, onChatPress, onRecipePress }: MealCardProps) {
+export function MealCard({ meal, metabolicType, onPress, onFeedback, onChatPress, onRecipePress }: MealCardProps) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
   const [showTags, setShowTags] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -96,7 +97,6 @@ export function MealCard({ meal, onPress, onFeedback, onChatPress, onRecipePress
       {/* Content */}
       <View style={styles.content}>
         <Text style={styles.name}>{meal.name}</Text>
-        <Text style={styles.whyLine} numberOfLines={2}>{meal.whyLine}</Text>
 
         {/* Nutrition badge */}
         <View style={styles.nutritionRow}>
@@ -107,6 +107,14 @@ export function MealCard({ meal, onPress, onFeedback, onChatPress, onRecipePress
             <Text style={styles.nutritionText}>{meal.protein}g protein</Text>
           </View>
         </View>
+
+        {/* Personalized Why Section */}
+        {metabolicType && (
+          <View style={styles.whySection}>
+            <Text style={styles.whyHeader}>For {metabolicType}s:</Text>
+            <Text style={styles.whyExplanation}>{meal.whyLine}</Text>
+          </View>
+        )}
 
         {/* Feedback row */}
         <View style={styles.feedbackRow}>
@@ -187,13 +195,14 @@ export function MealCard({ meal, onPress, onFeedback, onChatPress, onRecipePress
 interface MealCardSlotProps {
   meals: Meal[];
   label: string;
+  metabolicType?: MetabolicType;
   onMealPress?: (meal: Meal) => void;
   onFeedback?: (mealId: string, feedback: "up" | "down", tags?: string[]) => void;
   onChatPress?: (meal: Meal) => void;
   onRecipePress?: (meal: Meal) => void;
 }
 
-export function MealCardSlot({ meals, label, onMealPress, onFeedback, onChatPress, onRecipePress }: MealCardSlotProps) {
+export function MealCardSlot({ meals, label, metabolicType, onMealPress, onFeedback, onChatPress, onRecipePress }: MealCardSlotProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -231,6 +240,7 @@ export function MealCardSlot({ meals, label, onMealPress, onFeedback, onChatPres
           <View key={meal.id} style={slotStyles.cardWrapper}>
             <MealCard
               meal={meal}
+              metabolicType={metabolicType}
               onPress={() => onMealPress?.(meal)}
               onFeedback={(fb, tags) => onFeedback?.(meal.id, fb, tags)}
               onChatPress={onChatPress ? () => onChatPress(meal) : undefined}
@@ -284,6 +294,25 @@ const styles = StyleSheet.create({
     color: K.brown,
     fontWeight: "600",
   },
+  whySection: {
+    backgroundColor: K.bone,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    marginBottom: spacing.md,
+  },
+  whyHeader: {
+    ...typography.caption,
+    color: K.ochre,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  whyExplanation: {
+    ...typography.bodySmall,
+    color: K.brown,
+    fontStyle: "italic",
+    lineHeight: 18,
+  },
   content: {
     padding: spacing.md,
   },
@@ -292,12 +321,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: K.brown,
     marginBottom: 4,
-  },
-  whyLine: {
-    ...typography.bodySmall,
-    color: K.textMuted,
-    fontStyle: "italic",
-    marginBottom: spacing.sm,
   },
   nutritionRow: {
     flexDirection: "row",

@@ -212,6 +212,7 @@ export function HomeScreen() {
         <MealCardSlot
           label="Breakfast"
           meals={breakfastMeals}
+          metabolicType={metabolicType}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}
@@ -222,6 +223,7 @@ export function HomeScreen() {
         <MealCardSlot
           label="Lunch"
           meals={lunchMeals}
+          metabolicType={metabolicType}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}
@@ -232,6 +234,7 @@ export function HomeScreen() {
         <MealCardSlot
           label="Dinner"
           meals={dinnerMeals}
+          metabolicType={metabolicType}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}

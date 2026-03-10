@@ -150,11 +150,13 @@ const styles = StyleSheet.create({
 export function EsterGreeting({
   message,
   userName,
+  subMessage,
   avatarState = "neutral",
   onPress,
 }: {
   message: string;
   userName?: string;
+  subMessage?: string;
   avatarState?: AvatarState;
   onPress?: () => void;
 }) {
@@ -172,6 +174,9 @@ export function EsterGreeting({
       <View style={greetingStyles.content}>
         <Text style={greetingStyles.label}>ESTER</Text>
         <Text style={greetingStyles.message}>{greeting}</Text>
+        {subMessage && (
+          <Text style={greetingStyles.subMessage}>{subMessage}</Text>
+        )}
         {onPress && (
           <View style={greetingStyles.chatHint}>
             <Text style={greetingStyles.chatHintText}>Tap to chat →</Text>
@@ -209,6 +214,13 @@ const greetingStyles = StyleSheet.create({
   },
   chatHint: {
     marginTop: spacing.sm,
+  },
+  subMessage: {
+    ...typography.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: K.textMuted,
+    marginTop: 4,
   },
   chatHintText: {
     ...typography.caption,

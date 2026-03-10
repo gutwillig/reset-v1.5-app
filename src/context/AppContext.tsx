@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MetabolicType } from "../constants/colors";
+import { getTokens, clearTokens } from "../services/apiClient";
+import { fetchMe, AuthUser } from "../services/auth";
 
 // State types
 interface UserProfile {
@@ -20,22 +22,29 @@ interface BiometricData {
   vascularAge: number;
 }
 
+interface AuthState {
+  isAuthenticated: boolean;
+  authUser: AuthUser | null;
+}
+
 interface AppState {
   user: UserProfile;
   biometrics: BiometricData | null;
+  auth: AuthState;
   isLoading: boolean;
 }
 
 // Action types
 type AppAction =
   | { type: "SET_LOADING"; payload: boolean }
-  | { type: "LOAD_STATE"; payload: AppState }
+  | { type: "LOAD_STATE"; payload: Omit<AppState, "auth" | "isLoading"> }
   | { type: "SET_QUIZ_ANSWER"; payload: { questionId: string; answer: string } }
   | { type: "SET_METABOLIC_TYPE"; payload: MetabolicType }
   | { type: "SET_BIOMETRICS"; payload: BiometricData }
   | { type: "SET_TASTE_PREFERENCES"; payload: string[] }
   | { type: "SET_DIETARY_RESTRICTIONS"; payload: string[] }
   | { type: "SET_USER_ACCOUNT"; payload: { email: string; name?: string } }
+  | { type: "SET_AUTH"; payload: AuthState }
   | { type: "COMPLETE_ONBOARDING" }
   | { type: "RESET_STATE" };
 
@@ -48,6 +57,7 @@ const initialState: AppState = {
     hasCompletedOnboarding: false,
   },
   biometrics: null,
+  auth: { isAuthenticated: false, authUser: null },
   isLoading: true,
 };
 
@@ -61,7 +71,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, isLoading: action.payload };
 
     case "LOAD_STATE":
-      return { ...action.payload, isLoading: false };
+      return {
+        ...state,
+        user: action.payload.user,
+        biometrics: action.payload.biometrics,
+        isLoading: false,
+      };
 
     case "SET_QUIZ_ANSWER":
       return {
@@ -118,6 +133,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
         },
       };
 
+    case "SET_AUTH":
+      return {
+        ...state,
+        auth: action.payload,
+      };
+
     case "COMPLETE_ONBOARDING":
       return {
         ...state,
@@ -139,13 +160,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
 interface AppContextValue {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
-  // Helper functions
   setQuizAnswer: (questionId: string, answer: string) => void;
   setMetabolicType: (type: MetabolicType) => void;
   setBiometrics: (data: BiometricData) => void;
   setTastePreferences: (preferences: string[]) => void;
   setDietaryRestrictions: (restrictions: string[]) => void;
   setUserAccount: (email: string, name?: string) => void;
+  setAuth: (user: AuthUser) => void;
+  clearAuth: () => void;
   completeOnboarding: () => void;
   resetState: () => void;
 }
@@ -165,7 +187,7 @@ export function AppProvider({ children }: AppProviderProps) {
     loadState();
   }, []);
 
-  // Save state on change
+  // Save state on change (exclude auth — derived from tokens)
   useEffect(() => {
     if (!state.isLoading) {
       saveState(state);
@@ -174,12 +196,28 @@ export function AppProvider({ children }: AppProviderProps) {
 
   async function loadState() {
     try {
+      // Load persisted app state
       const savedState = await AsyncStorage.getItem(STORAGE_KEY);
       if (savedState) {
         const parsed = JSON.parse(savedState);
         dispatch({ type: "LOAD_STATE", payload: parsed });
       } else {
         dispatch({ type: "SET_LOADING", payload: false });
+      }
+
+      // Check if user has a valid session
+      const { accessToken } = await getTokens();
+      if (accessToken) {
+        try {
+          const authUser = await fetchMe();
+          dispatch({
+            type: "SET_AUTH",
+            payload: { isAuthenticated: true, authUser },
+          });
+        } catch {
+          // Token invalid/expired and refresh failed
+          await clearTokens();
+        }
       }
     } catch (error) {
       console.error("Failed to load state:", error);
@@ -189,7 +227,12 @@ export function AppProvider({ children }: AppProviderProps) {
 
   async function saveState(stateToSave: AppState) {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+      // Only persist user profile and biometrics, not auth
+      const { user, biometrics } = stateToSave;
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ user, biometrics }),
+      );
     } catch (error) {
       console.error("Failed to save state:", error);
     }
@@ -220,6 +263,20 @@ export function AppProvider({ children }: AppProviderProps) {
     dispatch({ type: "SET_USER_ACCOUNT", payload: { email, name } });
   };
 
+  const setAuth = (user: AuthUser) => {
+    dispatch({
+      type: "SET_AUTH",
+      payload: { isAuthenticated: true, authUser: user },
+    });
+  };
+
+  const clearAuth = () => {
+    dispatch({
+      type: "SET_AUTH",
+      payload: { isAuthenticated: false, authUser: null },
+    });
+  };
+
   const completeOnboarding = () => {
     dispatch({ type: "COMPLETE_ONBOARDING" });
   };
@@ -227,6 +284,7 @@ export function AppProvider({ children }: AppProviderProps) {
   const resetState = () => {
     dispatch({ type: "RESET_STATE" });
     AsyncStorage.removeItem(STORAGE_KEY);
+    clearTokens();
   };
 
   const value: AppContextValue = {
@@ -238,6 +296,8 @@ export function AppProvider({ children }: AppProviderProps) {
     setTastePreferences,
     setDietaryRestrictions,
     setUserAccount,
+    setAuth,
+    clearAuth,
     completeOnboarding,
     resetState,
   };

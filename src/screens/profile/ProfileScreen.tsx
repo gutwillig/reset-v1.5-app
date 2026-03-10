@@ -55,8 +55,7 @@ export function ProfileScreen() {
   };
 
   const handleSettingsPress = () => {
-    // Navigate to settings
-    console.log("Navigate to settings");
+    (navigation as any).navigate("Settings");
   };
 
   const getSignalColor = (level: string) => {
@@ -208,7 +207,7 @@ export function ProfileScreen() {
           <Text style={styles.settingsArrow}>→</Text>
         </TouchableOpacity>
 
-        {/* Reset button (dev) */}
+        {/* Account actions */}
         <View style={styles.actions}>
           <Button
             title="Reset Profile"

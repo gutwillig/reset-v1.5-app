@@ -11,18 +11,15 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { K } from "../../constants/colors";
 import { typography } from "../../constants/typography";
-import { EsterBubble, Button } from "../../components";
+import { Button } from "../../components";
 import { useApp } from "../../context/AppContext";
-import { registerWithEmail, loginWithApple } from "../../services/auth";
+import { loginWithEmail, loginWithApple } from "../../services/auth";
 
-type Props = NativeStackScreenProps<any, "Account">;
-
-export function AccountScreen({ navigation }: Props) {
-  const { setUserAccount, setAuth, completeOnboarding } = useApp();
+export function LoginScreen() {
+  const { setAuth, resetState } = useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -35,19 +32,16 @@ export function AccountScreen({ navigation }: Props) {
     }
   }, []);
 
-  const isValid = email.includes("@") && password.length >= 8;
+  const isValid = email.includes("@") && password.length >= 1;
 
-  const handleCreateAccount = async () => {
+  const handleLogin = async () => {
     setError(null);
     setIsLoading(true);
     try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const user = await registerWithEmail(email, password, timezone);
-      setUserAccount(user.email ?? email, user.firstName ?? undefined);
+      const user = await loginWithEmail(email, password);
       setAuth(user);
-      completeOnboarding();
     } catch (err: any) {
-      setError(err.message || "Failed to create account");
+      setError(err.message || "Invalid email or password");
     } finally {
       setIsLoading(false);
     }
@@ -69,12 +63,7 @@ export function AccountScreen({ navigation }: Props) {
       }
 
       const user = await loginWithApple(credential.identityToken);
-      setUserAccount(
-        user.email ?? "apple-user",
-        user.firstName ?? credential.fullName?.givenName ?? undefined,
-      );
       setAuth(user);
-      completeOnboarding();
     } catch (err: any) {
       if (err.code === "ERR_REQUEST_CANCELED") return;
       setError(err.message || "Apple sign-in failed");
@@ -83,8 +72,8 @@ export function AccountScreen({ navigation }: Props) {
     }
   };
 
-  const handleSkip = () => {
-    completeOnboarding();
+  const handleStartOver = () => {
+    resetState();
   };
 
   return (
@@ -94,7 +83,10 @@ export function AccountScreen({ navigation }: Props) {
         style={styles.keyboardView}
       >
         <ScrollView contentContainerStyle={styles.content}>
-          <EsterBubble message="Save your profile so I don't lose what I just learned." />
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Sign in to pick up where you left off.
+          </Text>
 
           <View style={styles.form}>
             {error && (
@@ -124,7 +116,7 @@ export function AccountScreen({ navigation }: Props) {
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Min 8 chars, uppercase, number, symbol"
+                placeholder="Your password"
                 placeholderTextColor={K.faded}
                 secureTextEntry
                 editable={!isLoading}
@@ -132,8 +124,8 @@ export function AccountScreen({ navigation }: Props) {
             </View>
 
             <Button
-              title={isLoading ? "Creating account..." : "Save profile"}
-              onPress={handleCreateAccount}
+              title={isLoading ? "Signing in..." : "Sign in"}
+              onPress={handleLogin}
               disabled={!isValid || isLoading}
             />
 
@@ -166,11 +158,11 @@ export function AccountScreen({ navigation }: Props) {
 
         <View style={styles.bottom}>
           <TouchableOpacity
-            style={styles.skipButton}
-            onPress={handleSkip}
+            style={styles.startOverButton}
+            onPress={handleStartOver}
             disabled={isLoading}
           >
-            <Text style={styles.skipText}>Skip for now</Text>
+            <Text style={styles.startOverText}>Start over</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -190,8 +182,18 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 80,
   },
+  title: {
+    ...typography.h1,
+    color: K.text,
+    marginTop: 40,
+  },
+  subtitle: {
+    ...typography.body,
+    color: K.sub,
+    marginTop: 8,
+  },
   form: {
-    marginTop: 28,
+    marginTop: 32,
     gap: 16,
   },
   errorContainer: {
@@ -261,10 +263,10 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     alignItems: "center",
   },
-  skipButton: {
+  startOverButton: {
     padding: 8,
   },
-  skipText: {
+  startOverText: {
     fontSize: 14,
     color: K.faded,
   },

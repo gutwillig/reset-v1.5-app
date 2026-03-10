@@ -3,12 +3,14 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { OnboardingNavigator } from "./OnboardingNavigator";
 import { MainNavigator } from "./MainNavigator";
+import { LoginScreen } from "../screens/auth/LoginScreen";
 import { useApp } from "../context/AppContext";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { K } from "../constants/colors";
 
 export type RootStackParamList = {
   Onboarding: undefined;
+  Auth: undefined;
   Main: undefined;
 };
 
@@ -29,10 +31,12 @@ export function RootNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {state.user.hasCompletedOnboarding ? (
-          <Stack.Screen name="Main" component={MainNavigator} />
-        ) : (
+        {!state.user.hasCompletedOnboarding ? (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
+        ) : !state.auth.isAuthenticated ? (
+          <Stack.Screen name="Auth" component={LoginScreen} />
+        ) : (
+          <Stack.Screen name="Main" component={MainNavigator} />
         )}
       </Stack.Navigator>
     </NavigationContainer>

@@ -15,6 +15,7 @@ import {
 } from "../../components";
 import type { Meal } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { generateGreeting, getDayNumber } from "../../services/greetings";
 
 // Mock meal data generator
 function generateMealsForSlot(time: "breakfast" | "lunch" | "dinner", metabolicType: string): Meal[] {
@@ -124,7 +125,24 @@ export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const { state } = useApp();
   const metabolicType = state.user.metabolicType || "Explorer";
-  const userName = state.user.name || undefined;
+  const hasScan = !!state.biometrics;
+
+  // Use authenticated user name, fall back to onboarding name
+  const userName =
+    state.auth.authUser?.firstName ||
+    state.user.name ||
+    undefined;
+
+  // Calculate day number from account creation
+  const dayNumber = getDayNumber(state.auth.authUser?.createdAt);
+
+  // Generate personalized greeting
+  const greeting = generateGreeting({
+    metabolicType,
+    hasScan,
+    dayNumber,
+    userName,
+  });
 
   // UI State
   const [showCheckIn, setShowCheckIn] = useState(true);
@@ -136,14 +154,6 @@ export function HomeScreen() {
   const breakfastMeals = generateMealsForSlot("breakfast", metabolicType);
   const lunchMeals = generateMealsForSlot("lunch", metabolicType);
   const dinnerMeals = generateMealsForSlot("dinner", metabolicType);
-
-  // Ester greeting based on time of day
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
-  };
 
   const handleMealPress = (meal: Meal) => {
     // Navigate to recipe detail when card is tapped
@@ -185,8 +195,9 @@ export function HomeScreen() {
         {/* SLOT: Greeting (tappable to open chat) */}
         <View style={styles.greetingSlot}>
           <EsterGreeting
-            message={getGreeting()}
+            message={greeting.timeGreeting}
             userName={userName}
+            subMessage={greeting.message}
             onPress={handleEsterChatPress}
           />
         </View>

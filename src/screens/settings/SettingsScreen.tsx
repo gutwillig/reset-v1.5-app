@@ -1,0 +1,548 @@
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  Alert,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { K } from "../../constants/colors";
+import { typography, spacing, radius } from "../../constants/typography";
+import { DIETARY_RESTRICTIONS, TASTE_CLUSTERS } from "../../constants/types";
+import { Pill } from "../../components";
+import { useApp } from "../../context/AppContext";
+import { logout } from "../../services/auth";
+
+// Notification categories
+const NOTIFICATION_CATEGORIES = [
+  { id: "meals", label: "Daily Meal Plan" },
+  { id: "checkin", label: "Check-in Reminders" },
+  { id: "observations", label: "Ester Observations" },
+  { id: "weekly", label: "Weekly Review" },
+  { id: "promos", label: "Tips & Updates" },
+];
+
+export function SettingsScreen() {
+  const navigation = useNavigation();
+  const {
+    state,
+    setDietaryRestrictions,
+    setTastePreferences,
+    clearAuth,
+    resetState,
+  } = useApp();
+
+  // Local state for notification toggles
+  const [notifications, setNotifications] = useState<Record<string, boolean>>(
+    Object.fromEntries(NOTIFICATION_CATEGORIES.map((c) => [c.id, true]))
+  );
+
+  // Local state for dietary restrictions editing
+  const [editingDiet, setEditingDiet] = useState(false);
+  const [dietSelection, setDietSelection] = useState<string[]>(
+    state.user.dietaryRestrictions
+  );
+
+  // Local state for taste preferences editing
+  const [editingTaste, setEditingTaste] = useState(false);
+  const [tasteSelection, setTasteSelection] = useState<string[]>(
+    state.user.tastePreferences
+  );
+
+  const toggleNotification = (id: string) => {
+    setNotifications((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleDietOption = (id: string) => {
+    if (id === "none") {
+      setDietSelection(["none"]);
+      return;
+    }
+    setDietSelection((prev) => {
+      const filtered = prev.filter((s) => s !== "none");
+      return filtered.includes(id)
+        ? filtered.filter((s) => s !== id)
+        : [...filtered, id];
+    });
+  };
+
+  const saveDietaryRestrictions = () => {
+    setDietaryRestrictions(dietSelection);
+    setEditingDiet(false);
+  };
+
+  const selectTaste = (id: string) => {
+    setTasteSelection([id]);
+  };
+
+  const saveTastePreferences = () => {
+    setTastePreferences(tasteSelection);
+    setEditingTaste(false);
+  };
+
+  const handleSignOut = () => {
+    Alert.alert("Sign Out", "You'll need to sign in again next time.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        onPress: async () => {
+          await logout();
+          clearAuth();
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all your data. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Are you sure?",
+              "Type DELETE to confirm.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete Forever",
+                  style: "destructive",
+                  onPress: async () => {
+                    // TODO: Call delete account API endpoint
+                    await logout();
+                    resetState();
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <View style={styles.backButton} />
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Subscription */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
+          <View style={styles.card}>
+            <View style={styles.subscriptionRow}>
+              <View>
+                <Text style={styles.planName}>
+                  {state.biometrics ? "Pro" : "Free"}
+                </Text>
+                <Text style={styles.planDesc}>
+                  {state.biometrics
+                    ? "Full signal tracking & personalized meals"
+                    : "Basic meal plan & limited features"}
+                </Text>
+              </View>
+            </View>
+            {!state.biometrics && (
+              <TouchableOpacity style={styles.upgradeButton}>
+                <Text style={styles.upgradeText}>Upgrade to Pro</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Notifications */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>NOTIFICATIONS</Text>
+          <View style={styles.card}>
+            {NOTIFICATION_CATEGORIES.map((category, i) => (
+              <View
+                key={category.id}
+                style={[
+                  styles.toggleRow,
+                  i < NOTIFICATION_CATEGORIES.length - 1 && styles.toggleBorder,
+                ]}
+              >
+                <Text style={styles.toggleLabel}>{category.label}</Text>
+                <Switch
+                  value={notifications[category.id]}
+                  onValueChange={() => toggleNotification(category.id)}
+                  trackColor={{ false: K.border, true: K.ochre }}
+                  thumbColor={K.white}
+                />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Dietary Restrictions */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>DIETARY RESTRICTIONS</Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (editingDiet) {
+                  saveDietaryRestrictions();
+                } else {
+                  setDietSelection(state.user.dietaryRestrictions);
+                  setEditingDiet(true);
+                }
+              }}
+            >
+              <Text style={styles.editText}>
+                {editingDiet ? "Save" : "Edit"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {editingDiet ? (
+            <View style={styles.pillGrid}>
+              {DIETARY_RESTRICTIONS.map((option) => (
+                <Pill
+                  key={option.id}
+                  label={option.label}
+                  selected={dietSelection.includes(option.id)}
+                  onPress={() => toggleDietOption(option.id)}
+                  style={styles.pill}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.currentValue}>
+                {state.user.dietaryRestrictions.length > 0
+                  ? state.user.dietaryRestrictions
+                      .map(
+                        (id) =>
+                          DIETARY_RESTRICTIONS.find((d) => d.id === id)
+                            ?.label ?? id
+                      )
+                      .join(", ")
+                  : "None set"}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Taste Preferences */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>TASTE PREFERENCE</Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (editingTaste) {
+                  saveTastePreferences();
+                } else {
+                  setTasteSelection(state.user.tastePreferences);
+                  setEditingTaste(true);
+                }
+              }}
+            >
+              <Text style={styles.editText}>
+                {editingTaste ? "Save" : "Edit"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {editingTaste ? (
+            <View style={styles.tasteGrid}>
+              {TASTE_CLUSTERS.map((cluster) => (
+                <TouchableOpacity
+                  key={cluster.id}
+                  style={[
+                    styles.tasteCard,
+                    tasteSelection.includes(cluster.id) &&
+                      styles.tasteCardSelected,
+                  ]}
+                  onPress={() => selectTaste(cluster.id)}
+                >
+                  <Text
+                    style={[
+                      styles.tasteCardName,
+                      tasteSelection.includes(cluster.id) &&
+                        styles.tasteCardNameSelected,
+                    ]}
+                  >
+                    {cluster.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.currentValue}>
+                {state.user.tastePreferences.length > 0
+                  ? state.user.tastePreferences
+                      .map(
+                        (id) =>
+                          TASTE_CLUSTERS.find((t) => t.id === id)?.name ?? id
+                      )
+                      .join(", ")
+                  : "None set"}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Data & Privacy */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>DATA & PRIVACY</Text>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.linkRow}>
+              <Text style={styles.linkText}>Privacy Policy</Text>
+              <Text style={styles.linkArrow}>›</Text>
+            </TouchableOpacity>
+            <View style={styles.linkBorder} />
+            <TouchableOpacity style={styles.linkRow}>
+              <Text style={styles.linkText}>Terms of Service</Text>
+              <Text style={styles.linkArrow}>›</Text>
+            </TouchableOpacity>
+            <View style={styles.linkBorder} />
+            <TouchableOpacity style={styles.linkRow}>
+              <Text style={styles.linkText}>Export My Data</Text>
+              <Text style={styles.linkArrow}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Support */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>SUPPORT</Text>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.linkRow}>
+              <Text style={styles.linkText}>Help Center</Text>
+              <Text style={styles.linkArrow}>›</Text>
+            </TouchableOpacity>
+            <View style={styles.linkBorder} />
+            <TouchableOpacity style={styles.linkRow}>
+              <Text style={styles.linkText}>Contact Us</Text>
+              <Text style={styles.linkArrow}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Account Actions */}
+        <View style={styles.section}>
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={handleDeleteAccount}
+          >
+            <Text style={styles.deleteText}>Delete Account</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.versionContainer}>
+          <Text style={styles.versionText}>Reset v1.5.0</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: K.white,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: K.border,
+  },
+  backButton: {
+    width: 60,
+  },
+  backText: {
+    ...typography.bodyMedium,
+    color: K.brown,
+  },
+  headerTitle: {
+    ...typography.h3,
+    textAlign: "center",
+  },
+  content: {
+    paddingBottom: 100,
+  },
+  section: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: K.textMuted,
+    fontWeight: "600",
+    marginBottom: spacing.md,
+  },
+  editText: {
+    ...typography.bodySmall,
+    color: K.ochre,
+    fontWeight: "600",
+    marginBottom: spacing.md,
+  },
+  card: {
+    backgroundColor: K.bone,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  subscriptionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  planName: {
+    ...typography.bodyMedium,
+    color: K.brown,
+    fontSize: 18,
+  },
+  planDesc: {
+    ...typography.bodySmall,
+    color: K.textMuted,
+    marginTop: 2,
+  },
+  upgradeButton: {
+    backgroundColor: K.ochre,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: "center",
+    marginTop: spacing.md,
+  },
+  upgradeText: {
+    ...typography.button,
+    color: K.brown,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+  },
+  toggleBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: K.border,
+  },
+  toggleLabel: {
+    ...typography.body,
+    color: K.brown,
+  },
+  pillGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  pill: {
+    minWidth: "45%",
+    flexGrow: 1,
+  },
+  currentValue: {
+    ...typography.body,
+    color: K.brown,
+  },
+  tasteGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  tasteCard: {
+    width: "47%",
+    flexGrow: 1,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: K.border,
+    backgroundColor: K.bone,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  tasteCardSelected: {
+    borderColor: K.brown,
+    backgroundColor: K.brown,
+  },
+  tasteCardName: {
+    ...typography.bodyMedium,
+    fontSize: 13,
+    color: K.text,
+  },
+  tasteCardNameSelected: {
+    color: K.bone,
+  },
+  linkRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+  },
+  linkBorder: {
+    height: 1,
+    backgroundColor: K.border,
+  },
+  linkText: {
+    ...typography.body,
+    color: K.brown,
+  },
+  linkArrow: {
+    ...typography.body,
+    color: K.textMuted,
+    fontSize: 20,
+  },
+  signOutButton: {
+    backgroundColor: K.bone,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  signOutText: {
+    ...typography.bodyMedium,
+    color: K.brown,
+  },
+  deleteButton: {
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    marginTop: spacing.md,
+  },
+  deleteText: {
+    ...typography.bodyMedium,
+    color: K.err,
+  },
+  versionContainer: {
+    alignItems: "center",
+    marginTop: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+  versionText: {
+    ...typography.caption,
+    color: K.faded,
+  },
+});

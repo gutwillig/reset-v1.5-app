@@ -5,6 +5,7 @@ import { HomeScreen } from "../screens/home";
 import { ProfileScreen } from "../screens/profile";
 import { EsterChatScreen } from "../screens/chat";
 import { RecipeDetailScreen } from "../screens/recipe";
+import { SettingsScreen } from "../screens/settings/SettingsScreen";
 import { TabBar } from "../components";
 import type { Meal } from "../components";
 
@@ -24,6 +25,7 @@ export type MainStackParamList = {
   RecipeDetail: {
     meal: Meal;
   };
+  Settings: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -74,6 +76,14 @@ export function MainNavigator() {
       <Stack.Screen
         name="RecipeDetail"
         component={RecipeDetailScreen}
+        options={{
+          presentation: "modal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
         options={{
           presentation: "modal",
           animation: "slide_from_bottom",

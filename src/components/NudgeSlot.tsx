@@ -18,7 +18,7 @@ interface NudgeContent {
 
 interface NudgeSlotProps {
   content: NudgeContent | null;
-  onDismiss: () => void;
+  onDismiss?: () => void;
 }
 
 // Priority order: yap > scan > observation > milestone > generic
@@ -64,13 +64,15 @@ export function NudgeSlot({ content, onDismiss }: NudgeSlotProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: config.backgroundColor }]}>
-      {/* Dismiss button */}
-      <TouchableOpacity style={styles.dismissButton} onPress={onDismiss}>
-        <Text style={styles.dismissText}>×</Text>
-      </TouchableOpacity>
+      {/* Dismiss button - only shown if onDismiss provided */}
+      {onDismiss && (
+        <TouchableOpacity style={styles.dismissButton} onPress={onDismiss}>
+          <Text style={styles.dismissText}>×</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Content */}
-      <View style={styles.content}>
+      <View style={[styles.content, !onDismiss && styles.contentNoDismiss]}>
         <View style={styles.header}>
           <Avatar size={36} state={config.avatarState} />
           <View style={styles.headerText}>
@@ -160,6 +162,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingRight: spacing.lg, // Account for dismiss button
+  },
+  contentNoDismiss: {
+    paddingRight: 0,
   },
   header: {
     flexDirection: "row",

@@ -128,9 +128,7 @@ export function HomeScreen() {
 
   // UI State
   const [showCheckIn, setShowCheckIn] = useState(true);
-  const [nudge, setNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(
-    NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.")
-  );
+  const nudge = NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.");
 
   // Get meals for each slot
   const breakfastMeals = generateMealsForSlot("breakfast", metabolicType);
@@ -171,10 +169,6 @@ export function HomeScreen() {
     // Keep showing Ester's response
   };
 
-  const handleNudgeDismiss = () => {
-    setNudge(null);
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
@@ -191,12 +185,10 @@ export function HomeScreen() {
           />
         </View>
 
-        {/* SLOT: Nudge (one per session, dismissible) */}
-        {nudge && (
-          <View style={styles.nudgeSlot}>
-            <NudgeSlot content={nudge} onDismiss={handleNudgeDismiss} />
-          </View>
-        )}
+        {/* SLOT: Ester Insight (always visible) */}
+        <View style={styles.nudgeSlot}>
+          <NudgeSlot content={nudge} />
+        </View>
 
         {/* SLOT: Meal Cards - Breakfast */}
         <MealCardSlot

@@ -18,6 +18,7 @@ import { useApp } from "../../context/AppContext";
 import { generateGreeting, getDayNumber } from "../../services/greetings";
 import { getMealsForSlot } from "../../data/meals";
 import { getFavorites, addFavorite, removeFavorite } from "../../services/meals";
+import { submitCheckIn, getTodayCheckIn } from "../../services/checkIn";
 
 export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
@@ -49,10 +50,18 @@ export function HomeScreen() {
     NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.")
   );
 
-  // Load favorites on mount
+  // Load favorites and check today's check-in on mount
   useEffect(() => {
     getFavorites()
       .then((favs) => setFavoritedMeals(new Set(favs.map((f) => f.id))))
+      .catch(() => {}); // Silently fail if not authenticated yet
+
+    getTodayCheckIn()
+      .then((res) => {
+        if (res.checkIn) {
+          setShowCheckIn(false); // Already checked in today
+        }
+      })
       .catch(() => {}); // Silently fail if not authenticated yet
   }, []);
 
@@ -114,9 +123,17 @@ export function HomeScreen() {
     }
   };
 
-  const handleCheckInComplete = (data: any) => {
-    console.log("Check-in complete:", data);
-    // Keep showing Ester's response
+  const handleCheckInComplete = async (data: any) => {
+    try {
+      await submitCheckIn({
+        energy: data.energy,
+        stressTags: data.stress ? [data.stress] : [],
+        sleepHours: data.sleepHours ?? undefined,
+        sleepQuality: data.sleepQuality ?? undefined,
+      });
+    } catch {
+      // Check-in still shows Ester's response locally even if backend fails
+    }
   };
 
   return (

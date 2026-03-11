@@ -124,23 +124,31 @@ export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const { state } = useApp();
   const metabolicType = state.user.metabolicType || "Explorer";
-  const userName = state.user.name || undefined;
 
   // UI State
   const [showCheckIn, setShowCheckIn] = useState(true);
-  const nudge = NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.");
+  const [nudge, setNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(
+    NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.")
+  );
 
   // Get meals for each slot
   const breakfastMeals = generateMealsForSlot("breakfast", metabolicType);
   const lunchMeals = generateMealsForSlot("lunch", metabolicType);
   const dinnerMeals = generateMealsForSlot("dinner", metabolicType);
 
-  // Ester greeting based on time of day
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
+  // Dynamic greeting based on signals (scan data, check-in, behavioral pattern, or meal feedback)
+  // Never generic like "Good morning, User" - always references a specific signal
+  const getDynamicGreeting = () => {
+    // TODO: Pull from actual user signals/state
+    // For now, example dynamic greetings based on metabolic type
+    const greetings: Record<string, string> = {
+      Burner: "Your stress was elevated yesterday. Today's meals lean into recovery.",
+      Defender: "You've been building momentum. Let's keep your metabolism supported today.",
+      Restorer: "Your sleep improved last night. These meals will help you rebuild.",
+      Shifter: "You're in the second half of your cycle. I've adjusted portions to match.",
+      Explorer: "I'm still learning your patterns. Today's meals are balanced to gather more signal.",
+    };
+    return greetings[metabolicType] || greetings.Explorer;
   };
 
   const handleMealPress = (meal: Meal) => {
@@ -150,10 +158,6 @@ export function HomeScreen() {
 
   const handleRecipePress = (meal: Meal) => {
     navigation.navigate("RecipeDetail", { meal });
-  };
-
-  const handleEsterChatPress = () => {
-    navigation.navigate("EsterChat", { context: "general" });
   };
 
   const handleMealChatPress = (meal: Meal) => {
@@ -169,6 +173,10 @@ export function HomeScreen() {
     // Keep showing Ester's response
   };
 
+  const handleNudgeDismiss = () => {
+    setNudge(null);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
@@ -176,19 +184,17 @@ export function HomeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* SLOT: Greeting (tappable to open chat) */}
+        {/* SLOT: Greeting card - dynamic message based on signals */}
         <View style={styles.greetingSlot}>
-          <EsterGreeting
-            message={getGreeting()}
-            userName={userName}
-            onPress={handleEsterChatPress}
-          />
+          <EsterGreeting message={getDynamicGreeting()} />
         </View>
 
-        {/* SLOT: Ester Insight (always visible) */}
-        <View style={styles.nudgeSlot}>
-          <NudgeSlot content={nudge} />
-        </View>
+        {/* SLOT: Nudge (dismissible, one per session) */}
+        {nudge && (
+          <View style={styles.nudgeSlot}>
+            <NudgeSlot content={nudge} onDismiss={handleNudgeDismiss} />
+          </View>
+        )}
 
         {/* SLOT: Meal Cards - Breakfast */}
         <MealCardSlot
@@ -274,12 +280,13 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   greetingSlot: {
-    padding: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm, // 12px gap to nudge
   },
   nudgeSlot: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md, // 16px gap to meal cards
   },
   checkInSlot: {
     paddingHorizontal: spacing.lg,

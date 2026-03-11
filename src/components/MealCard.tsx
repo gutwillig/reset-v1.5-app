@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -38,16 +38,24 @@ const FEEDBACK_TAGS = [
 interface MealCardProps {
   meal: Meal;
   metabolicType?: MetabolicType;
+  isFavorited?: boolean;
   onPress?: () => void;
   onFeedback?: (feedback: "up" | "down", tags?: string[]) => void;
   onChatPress?: () => void;
   onRecipePress?: () => void;
+  onFavoriteToggle?: (isFavorited: boolean) => void;
 }
 
-export function MealCard({ meal, metabolicType, onPress, onFeedback, onChatPress, onRecipePress }: MealCardProps) {
+export function MealCard({ meal, metabolicType, isFavorited = false, onPress, onFeedback, onChatPress, onRecipePress, onFavoriteToggle }: MealCardProps) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
   const [showTags, setShowTags] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [favorited, setFavorited] = useState(isFavorited);
+
+  // Sync local state when prop changes (e.g., favorites loaded from API)
+  useEffect(() => {
+    setFavorited(isFavorited);
+  }, [isFavorited]);
 
   const handleThumbsUp = () => {
     setFeedback("up");
@@ -92,6 +100,19 @@ export function MealCard({ meal, metabolicType, onPress, onFeedback, onChatPress
         <View style={styles.prepBadge}>
           <Text style={styles.prepText}>{meal.prepTime} min</Text>
         </View>
+        {/* Favorite button */}
+        {onFavoriteToggle && (
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={() => {
+              const next = !favorited;
+              setFavorited(next);
+              onFavoriteToggle(next);
+            }}
+          >
+            <Text style={styles.favoriteIcon}>{favorited ? "\u2665" : "\u2661"}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Content */}
@@ -196,13 +217,15 @@ interface MealCardSlotProps {
   meals: Meal[];
   label: string;
   metabolicType?: MetabolicType;
+  favoritedMealIds?: Set<string>;
   onMealPress?: (meal: Meal) => void;
   onFeedback?: (mealId: string, feedback: "up" | "down", tags?: string[]) => void;
   onChatPress?: (meal: Meal) => void;
   onRecipePress?: (meal: Meal) => void;
+  onFavoriteToggle?: (mealId: string, isFavorited: boolean) => void;
 }
 
-export function MealCardSlot({ meals, label, metabolicType, onMealPress, onFeedback, onChatPress, onRecipePress }: MealCardSlotProps) {
+export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, onMealPress, onFeedback, onChatPress, onRecipePress, onFavoriteToggle }: MealCardSlotProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -241,10 +264,12 @@ export function MealCardSlot({ meals, label, metabolicType, onMealPress, onFeedb
             <MealCard
               meal={meal}
               metabolicType={metabolicType}
+              isFavorited={favoritedMealIds?.has(meal.id)}
               onPress={() => onMealPress?.(meal)}
               onFeedback={(fb, tags) => onFeedback?.(meal.id, fb, tags)}
               onChatPress={onChatPress ? () => onChatPress(meal) : undefined}
               onRecipePress={onRecipePress ? () => onRecipePress(meal) : undefined}
+              onFavoriteToggle={onFavoriteToggle ? (fav) => onFavoriteToggle(meal.id, fav) : undefined}
             />
           </View>
         ))}
@@ -293,6 +318,21 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: K.brown,
     fontWeight: "600",
+  },
+  favoriteButton: {
+    position: "absolute",
+    top: spacing.sm,
+    left: spacing.sm,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  favoriteIcon: {
+    fontSize: 18,
+    color: K.ochre,
   },
   whySection: {
     backgroundColor: K.bone,

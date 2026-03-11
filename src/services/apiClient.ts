@@ -51,13 +51,18 @@ async function refreshAccessToken(): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/api/token/refresh`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({}),
   });
 
   if (!res.ok) {
-    await clearTokens();
+    // Only clear tokens on 401 (truly invalid token).
+    // Other errors (network, 5xx) shouldn't wipe the session.
+    if (res.status === 401) {
+      await clearTokens();
+    }
     throw new AuthExpiredError();
   }
 
@@ -73,10 +78,16 @@ export async function apiClient<T = any>(
 ): Promise<T> {
   const { accessToken, deviceId } = await getTokens();
 
+
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
+
+  // Only set Content-Type for requests with a body — Fastify rejects
+  // Content-Type: application/json with an empty body.
+  if (options.body) {
+    headers["Content-Type"] = headers["Content-Type"] || "application/json";
+  }
 
   if (accessToken) {
     headers["Authorization"] = `Bearer ${accessToken}`;
@@ -91,12 +102,14 @@ export async function apiClient<T = any>(
   });
 
   if (res.status === 401 && accessToken) {
+
     // Try to refresh the token
     try {
       if (!refreshPromise) {
         refreshPromise = refreshAccessToken();
       }
       const newToken = await refreshPromise;
+
       refreshPromise = null;
 
       // Retry original request with new token

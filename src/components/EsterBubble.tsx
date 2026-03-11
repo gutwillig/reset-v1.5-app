@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, ViewStyle, StyleProp, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import { K } from "../constants/colors";
 import { typography, spacing, radius } from "../constants/typography";
 import { Avatar, AvatarState } from "./Avatar";
@@ -146,44 +146,27 @@ const styles = StyleSheet.create({
   },
 });
 
-// Additional component for greeting variant with larger presence
+// Greeting card - top of Home screen
+// Dynamic message based on signals (scan data, check-in, behavioral pattern, or meal feedback)
 export function EsterGreeting({
   message,
-  userName,
   subMessage,
   avatarState = "neutral",
-  onPress,
 }: {
   message: string;
-  userName?: string;
   subMessage?: string;
   avatarState?: AvatarState;
-  onPress?: () => void;
 }) {
-  const greeting = userName ? `${message}, ${userName}.` : message;
-
-  const Container = onPress ? TouchableOpacity : View;
-
   return (
-    <Container
-      style={greetingStyles.container}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
-      <Avatar size={56} state={avatarState} />
+    <View style={greetingStyles.container}>
+      <Avatar size={48} state={avatarState} />
       <View style={greetingStyles.content}>
-        <Text style={greetingStyles.label}>ESTER</Text>
-        <Text style={greetingStyles.message}>{greeting}</Text>
+        <Text style={greetingStyles.message}>{message}</Text>
         {subMessage && (
           <Text style={greetingStyles.subMessage}>{subMessage}</Text>
         )}
-        {onPress && (
-          <View style={greetingStyles.chatHint}>
-            <Text style={greetingStyles.chatHintText}>Tap to chat →</Text>
-          </View>
-        )}
       </View>
-    </Container>
+    </View>
   );
 }
 
@@ -194,26 +177,18 @@ const greetingStyles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: K.bone,
     padding: spacing.lg,
-    borderRadius: radius.xl,
+    paddingVertical: 20,
+    borderRadius: radius.lg,
   },
   content: {
     flex: 1,
-  },
-  label: {
-    fontSize: 10,
-    letterSpacing: 2,
-    color: K.textMuted,
-    fontWeight: "600",
-    marginBottom: 4,
+    justifyContent: "center",
   },
   message: {
-    ...typography.h3,
+    fontFamily: "PlayfairDisplay_400Regular",
     fontSize: 18,
     lineHeight: 26,
     color: K.brown,
-  },
-  chatHint: {
-    marginTop: spacing.sm,
   },
   subMessage: {
     ...typography.body,
@@ -221,11 +196,6 @@ const greetingStyles = StyleSheet.create({
     lineHeight: 20,
     color: K.textMuted,
     marginTop: 4,
-  },
-  chatHintText: {
-    ...typography.caption,
-    color: K.ochre,
-    fontWeight: "600",
   },
 });
 

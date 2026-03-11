@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -16,7 +17,15 @@ import { K } from "../../constants/colors";
 import { typography, spacing, radius } from "../../constants/typography";
 import { Avatar } from "../../components";
 import { useApp } from "../../context/AppContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  sendMessage as sendChatMessage,
+  getSessions,
+  getSessionMessages,
+} from "../../services/chat";
 import type { Meal } from "../../components";
+
+const PENDING_NEW_CHAT_KEY = "@reset_pending_new_chat";
 
 type ChatRouteParams = {
   EsterChat: {
@@ -32,51 +41,6 @@ interface Message {
   timestamp: Date;
 }
 
-// Ester's response generator (mock - would connect to backend)
-function getEsterResponse(userMessage: string, context?: string, meal?: Meal): string {
-  const lowerMessage = userMessage.toLowerCase();
-
-  // Meal-specific context
-  if (meal) {
-    if (lowerMessage.includes("why") || lowerMessage.includes("explain")) {
-      return `Great question about the ${meal.name}. ${meal.whyLine} This meal has ${meal.protein}g of protein which is key for your metabolic type.`;
-    }
-    if (lowerMessage.includes("substitute") || lowerMessage.includes("swap") || lowerMessage.includes("replace")) {
-      return `I can suggest some alternatives to ${meal.name}. What are you looking to change — the protein, the prep time, or the overall flavor profile?`;
-    }
-    if (lowerMessage.includes("calories") || lowerMessage.includes("nutrition")) {
-      return `${meal.name} has ${meal.calories} calories and ${meal.protein}g of protein. The macros are balanced for your type — designed to keep your energy steady.`;
-    }
-    return `Tell me more about what you're thinking regarding ${meal.name}. I can adjust timing, ingredients, or suggest something completely different.`;
-  }
-
-  // General responses
-  if (lowerMessage.includes("hungry") || lowerMessage.includes("starving")) {
-    return "I hear you. That hunger is real — it's your body asking for fuel. Let me check your meal timing. Have you eaten in the last 3-4 hours?";
-  }
-  if (lowerMessage.includes("tired") || lowerMessage.includes("exhausted") || lowerMessage.includes("energy")) {
-    return "Low energy often signals a metabolic mismatch. When did you last eat, and what was it? That'll help me see if it's timing, fuel type, or something else.";
-  }
-  if (lowerMessage.includes("stress") || lowerMessage.includes("anxious") || lowerMessage.includes("overwhelmed")) {
-    return "Stress directly impacts how your body processes food. Your cortisol levels affect hunger signals and energy. I'll adjust tonight's dinner to include more calming nutrients.";
-  }
-  if (lowerMessage.includes("craving") || lowerMessage.includes("want")) {
-    return "Cravings are signals, not weaknesses. What are you craving? Sweet, salty, crunchy? That tells me what your body might actually need.";
-  }
-  if (lowerMessage.includes("weight") || lowerMessage.includes("lose") || lowerMessage.includes("gain")) {
-    return "I don't focus on weight — I focus on how your body uses energy. When we get your metabolism stable, your body finds its balance naturally. What's driving this question?";
-  }
-  if (lowerMessage.includes("hello") || lowerMessage.includes("hi") || lowerMessage.includes("hey")) {
-    return "Hey! I'm here. What's on your mind — food, energy, or something else?";
-  }
-  if (lowerMessage.includes("thank")) {
-    return "Of course. That's what I'm here for. Anything else on your mind?";
-  }
-
-  // Default response
-  return "Tell me more. The more context you give me, the better I can help tune your meals to what your body actually needs.";
-}
-
 export function EsterChatScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<ChatRouteParams, "EsterChat">>();
@@ -89,26 +53,86 @@ export function EsterChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [chatSessionId, setChatSessionId] = useState<string | undefined>();
+  const [error, setError] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  // Initial greeting based on context
+  const defaultGreeting: Message = {
+    id: "initial",
+    text: "I'm your physician in your pocket. Ask me anything about your meals, energy, or how you're feeling. I'm here to help.",
+    sender: "ester",
+    timestamp: new Date(),
+  };
+
+  // Load existing session and messages on mount
   useEffect(() => {
-    const initialMessage: Message = {
-      id: "initial",
-      text: meal
-        ? `Let's talk about ${meal.name}. What would you like to know — why I picked it, what you could swap, or something else?`
-        : "I'm your physician in your pocket. Ask me anything about your meals, energy, or how you're feeling. I'm here to help.",
-      sender: "ester",
-      timestamp: new Date(),
-    };
-    setMessages([initialMessage]);
+    async function loadChatHistory() {
+      // If opening with a meal context, always start a fresh session
+      if (meal) {
+        setMessages([{
+          id: "initial",
+          text: `Let's talk about ${meal.name}. What would you like to know — why I picked it, what you could swap, or something else?`,
+          sender: "ester",
+          timestamp: new Date(),
+        }]);
+        setIsLoadingHistory(false);
+        return;
+      }
+
+      try {
+        // If user tapped "new chat" before leaving, don't reload the old session
+        const pendingNew = await AsyncStorage.getItem(PENDING_NEW_CHAT_KEY);
+        if (pendingNew) {
+          setMessages([defaultGreeting]);
+          setIsLoadingHistory(false);
+          return;
+        }
+
+        const sessions = await getSessions();
+        if (sessions.length > 0) {
+          // Resume the most recent session
+          const latestSession = sessions[0];
+          setChatSessionId(latestSession.id);
+
+          const history = await getSessionMessages(latestSession.id, 1, 50);
+          if (history.data.length > 0) {
+            // API returns newest-first, reverse to chronological order
+            const sorted = [...history.data].sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+            );
+            const loaded: Message[] = [
+              // Prepend the greeting so there's always a welcome message at the top
+              defaultGreeting,
+              ...sorted.map((msg) => ({
+                id: msg.id,
+                text: msg.content,
+                sender: msg.role === "user" ? "user" as const : "ester" as const,
+                timestamp: new Date(msg.createdAt),
+              })),
+            ];
+            setMessages(loaded);
+            setIsLoadingHistory(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to default greeting
+      }
+
+      setMessages([defaultGreeting]);
+      setIsLoadingHistory(false);
+    }
+
+    loadChatHistory();
   }, [meal]);
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
+  const handleSend = async () => {
+    if (!inputText.trim() || isTyping) return;
 
+    const messageText = inputText.trim();
     const userMessage: Message = {
       id: `user-${Date.now()}`,
-      text: inputText.trim(),
+      text: messageText,
       sender: "user",
       timestamp: new Date(),
     };
@@ -116,19 +140,55 @@ export function EsterChatScreen() {
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setIsTyping(true);
+    setError(null);
 
-    // Simulate Ester typing and responding
-    setTimeout(() => {
-      const response = getEsterResponse(inputText, context, meal);
+    try {
+      // Prepend meal context on the first user message if chatting about a meal
+      const contextPrefix =
+        meal && !chatSessionId
+          ? `[Context: User is asking about their meal "${meal.name}" - ${meal.calories} cal, ${meal.protein}g protein. Why line: ${meal.whyLine}]\n\n`
+          : "";
+
+      const response = await sendChatMessage(
+        contextPrefix + messageText,
+        chatSessionId,
+      );
+
+      // Track the session for follow-up messages
+      if (!chatSessionId) {
+        setChatSessionId(response.chatSessionId);
+        // Clear pending new chat flag — session is now active
+        await AsyncStorage.removeItem(PENDING_NEW_CHAT_KEY);
+      }
+
       const esterMessage: Message = {
-        id: `ester-${Date.now()}`,
-        text: response,
+        id: response.id,
+        text: response.content,
+        sender: "ester",
+        timestamp: new Date(response.createdAt),
+      };
+      setMessages((prev) => [...prev, esterMessage]);
+    } catch (err: any) {
+      setError(err.message || "Failed to send message");
+      // Add an error message bubble so the user knows what happened
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        text: "Sorry, I couldn't process that. Please try again.",
         sender: "ester",
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, esterMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 1000);
+    }
+  };
+
+  const handleNewChat = async () => {
+    setChatSessionId(undefined);
+    setMessages([defaultGreeting]);
+    setError(null);
+    // Persist the intent so re-entry doesn't reload the old session
+    await AsyncStorage.setItem(PENDING_NEW_CHAT_KEY, "true");
   };
 
   const handleClose = () => {
@@ -149,7 +209,9 @@ export function EsterChatScreen() {
             <Text style={styles.headerSubtitle}>Your physician in your pocket</Text>
           </View>
         </View>
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity style={styles.newChatButton} onPress={handleNewChat}>
+          <Text style={styles.newChatIcon}>+</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Meal context banner (if chatting about a specific meal) */}
@@ -166,6 +228,11 @@ export function EsterChatScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
       >
+        {isLoadingHistory ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={K.textMuted} />
+          </View>
+        ) : (
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
@@ -177,6 +244,7 @@ export function EsterChatScreen() {
           ))}
           {isTyping && <TypingIndicator />}
         </ScrollView>
+        )}
 
         {/* Input */}
         <View style={styles.inputContainer}>
@@ -307,8 +375,18 @@ const styles = StyleSheet.create({
     color: K.textMuted,
     fontSize: 11,
   },
-  headerSpacer: {
+  newChatButton: {
     width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: K.white,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  newChatIcon: {
+    fontSize: 22,
+    color: K.brown,
+    fontWeight: "300",
   },
   contextBanner: {
     backgroundColor: K.blue,
@@ -326,6 +404,11 @@ const styles = StyleSheet.create({
   contextMeal: {
     ...typography.bodyMedium,
     color: K.brown,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   keyboardView: {
     flex: 1,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -16,110 +16,8 @@ import {
 import type { Meal } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { generateGreeting, getDayNumber } from "../../services/greetings";
-
-// Mock meal data generator
-function generateMealsForSlot(time: "breakfast" | "lunch" | "dinner", metabolicType: string): Meal[] {
-  const mealsByTime: Record<string, Meal[]> = {
-    breakfast: [
-      {
-        id: "b1",
-        name: "Protein Scramble",
-        whyLine: "Protein-forward to stabilize your morning and prevent afternoon crashes.",
-        calories: 420,
-        protein: 32,
-        prepTime: 15,
-        time: "breakfast",
-        imageUrl: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400&h=300&fit=crop",
-      },
-      {
-        id: "b2",
-        name: "Greek Yogurt Bowl",
-        whyLine: "High protein, low sugar start. Keeps blood sugar stable.",
-        calories: 380,
-        protein: 28,
-        prepTime: 5,
-        time: "breakfast",
-        imageUrl: "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&h=300&fit=crop",
-      },
-      {
-        id: "b3",
-        name: "Avocado Toast + Eggs",
-        whyLine: "Healthy fats and protein. Sets your metabolism right.",
-        calories: 450,
-        protein: 22,
-        prepTime: 10,
-        time: "breakfast",
-        imageUrl: "https://images.unsplash.com/photo-1541519227354-08fa5d50c44d?w=400&h=300&fit=crop",
-      },
-    ],
-    lunch: [
-      {
-        id: "l1",
-        name: "Grilled Chicken Salad",
-        whyLine: "Balanced macros to carry you through the afternoon slump.",
-        calories: 520,
-        protein: 42,
-        prepTime: 20,
-        time: "lunch",
-        imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop",
-      },
-      {
-        id: "l2",
-        name: "Salmon Bowl",
-        whyLine: "Omega-3s support your brain. Keeps energy steady.",
-        calories: 580,
-        protein: 38,
-        prepTime: 25,
-        time: "lunch",
-        imageUrl: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&h=300&fit=crop",
-      },
-      {
-        id: "l3",
-        name: "Turkey Wrap",
-        whyLine: "Light but filling. Won't weigh you down.",
-        calories: 460,
-        protein: 35,
-        prepTime: 10,
-        time: "lunch",
-        imageUrl: "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=400&h=300&fit=crop",
-      },
-    ],
-    dinner: [
-      {
-        id: "d1",
-        name: "Herb-Crusted Salmon",
-        whyLine: "Calming omega-3s for evening. Helps you wind down.",
-        calories: 540,
-        protein: 40,
-        prepTime: 30,
-        time: "dinner",
-        imageUrl: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&h=300&fit=crop",
-      },
-      {
-        id: "d2",
-        name: "Chicken Stir-Fry",
-        whyLine: "Light on digestion. Vegetables support recovery.",
-        calories: 480,
-        protein: 36,
-        prepTime: 25,
-        time: "dinner",
-        imageUrl: "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=400&h=300&fit=crop",
-      },
-      {
-        id: "d3",
-        name: "Mediterranean Plate",
-        whyLine: "Anti-inflammatory. Supports restful sleep.",
-        calories: 520,
-        protein: 32,
-        prepTime: 20,
-        time: "dinner",
-        imageUrl: "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=400&h=300&fit=crop",
-      },
-    ],
-  };
-
-  return mealsByTime[time] || [];
-}
+import { getMealsForSlot } from "../../data/meals";
+import { getFavorites, addFavorite, removeFavorite } from "../../services/meals";
 
 export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
@@ -146,12 +44,22 @@ export function HomeScreen() {
 
   // UI State
   const [showCheckIn, setShowCheckIn] = useState(true);
-  const nudge = NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.");
+  const [favoritedMeals, setFavoritedMeals] = useState<Set<string>>(new Set());
+  const [nudge, setNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(
+    NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.")
+  );
 
-  // Get meals for each slot
-  const breakfastMeals = generateMealsForSlot("breakfast", metabolicType);
-  const lunchMeals = generateMealsForSlot("lunch", metabolicType);
-  const dinnerMeals = generateMealsForSlot("dinner", metabolicType);
+  // Load favorites on mount
+  useEffect(() => {
+    getFavorites()
+      .then((favs) => setFavoritedMeals(new Set(favs.map((f) => f.id))))
+      .catch(() => {}); // Silently fail if not authenticated yet
+  }, []);
+
+  // Get type-specific meals for each slot (3 options per slot)
+  const breakfastMeals = getMealsForSlot(metabolicType, "breakfast");
+  const lunchMeals = getMealsForSlot(metabolicType, "lunch");
+  const dinnerMeals = getMealsForSlot(metabolicType, "dinner");
 
   const handleMealPress = (meal: Meal) => {
     // Navigate to recipe detail when card is tapped
@@ -162,8 +70,8 @@ export function HomeScreen() {
     navigation.navigate("RecipeDetail", { meal });
   };
 
-  const handleEsterChatPress = () => {
-    navigation.navigate("EsterChat", { context: "general" });
+  const handleNudgeDismiss = () => {
+    setNudge(null);
   };
 
   const handleMealChatPress = (meal: Meal) => {
@@ -172,6 +80,38 @@ export function HomeScreen() {
 
   const handleFeedback = (mealId: string, feedback: "up" | "down", tags?: string[]) => {
     console.log("Feedback:", mealId, feedback, tags);
+  };
+
+  const handleFavoriteToggle = async (mealId: string) => {
+    const wasFavorited = favoritedMeals.has(mealId);
+    // Optimistic update
+    setFavoritedMeals((prev) => {
+      const next = new Set(prev);
+      if (wasFavorited) {
+        next.delete(mealId);
+      } else {
+        next.add(mealId);
+      }
+      return next;
+    });
+    try {
+      if (wasFavorited) {
+        await removeFavorite(mealId);
+      } else {
+        await addFavorite(mealId);
+      }
+    } catch {
+      // Revert on failure
+      setFavoritedMeals((prev) => {
+        const next = new Set(prev);
+        if (wasFavorited) {
+          next.add(mealId);
+        } else {
+          next.delete(mealId);
+        }
+        return next;
+      });
+    }
   };
 
   const handleCheckInComplete = (data: any) => {
@@ -186,30 +126,32 @@ export function HomeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* SLOT: Greeting (tappable to open chat) */}
+        {/* SLOT: Greeting card - dynamic message based on signals */}
         <View style={styles.greetingSlot}>
           <EsterGreeting
-            message={greeting.timeGreeting}
-            userName={userName}
+            message={userName ? `${greeting.timeGreeting}, ${userName}.` : `${greeting.timeGreeting}.`}
             subMessage={greeting.message}
-            onPress={handleEsterChatPress}
           />
         </View>
 
-        {/* SLOT: Ester Insight (always visible) */}
-        <View style={styles.nudgeSlot}>
-          <NudgeSlot content={nudge} />
-        </View>
+        {/* SLOT: Nudge (dismissible, collapses when dismissed) */}
+        {nudge && (
+          <View style={styles.nudgeSlot}>
+            <NudgeSlot content={nudge} onDismiss={handleNudgeDismiss} />
+          </View>
+        )}
 
         {/* SLOT: Meal Cards - Breakfast */}
         <MealCardSlot
           label="Breakfast"
           meals={breakfastMeals}
           metabolicType={metabolicType}
+          favoritedMealIds={favoritedMeals}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
+          onFavoriteToggle={handleFavoriteToggle}
         />
 
         {/* SLOT: Meal Cards - Lunch */}
@@ -217,10 +159,12 @@ export function HomeScreen() {
           label="Lunch"
           meals={lunchMeals}
           metabolicType={metabolicType}
+          favoritedMealIds={favoritedMeals}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
+          onFavoriteToggle={handleFavoriteToggle}
         />
 
         {/* SLOT: Meal Cards - Dinner */}
@@ -228,10 +172,12 @@ export function HomeScreen() {
           label="Dinner"
           meals={dinnerMeals}
           metabolicType={metabolicType}
+          favoritedMealIds={favoritedMeals}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
+          onFavoriteToggle={handleFavoriteToggle}
         />
 
         {/* SLOT: Check-in prompt */}
@@ -285,12 +231,13 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   greetingSlot: {
-    padding: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm, // 12px gap to nudge
   },
   nudgeSlot: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md, // 16px gap to meal cards
   },
   checkInSlot: {
     paddingHorizontal: spacing.lg,

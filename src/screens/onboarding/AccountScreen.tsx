@@ -18,11 +18,12 @@ import { typography } from "../../constants/typography";
 import { EsterBubble, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { registerWithEmail, loginWithApple } from "../../services/auth";
+import { syncOnboardingToBackend } from "../../services/onboarding";
 
 type Props = NativeStackScreenProps<any, "Account">;
 
 export function AccountScreen({ navigation }: Props) {
-  const { setUserAccount, setAuth, completeOnboarding } = useApp();
+  const { state, setUserAccount, setAuth, completeOnboarding } = useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -45,6 +46,19 @@ export function AccountScreen({ navigation }: Props) {
       const user = await registerWithEmail(email, password, timezone);
       setUserAccount(user.email ?? email, user.firstName ?? undefined);
       setAuth(user);
+
+      // Push onboarding data to backend profile
+      try {
+        await syncOnboardingToBackend({
+          metabolicType: state.user.metabolicType,
+          quizAnswers: state.user.quizAnswers,
+          tastePreferences: state.user.tastePreferences,
+          dietaryRestrictions: state.user.dietaryRestrictions,
+        });
+      } catch {
+        // Non-blocking: onboarding completes even if sync fails
+      }
+
       completeOnboarding();
     } catch (err: any) {
       setError(err.message || "Failed to create account");
@@ -74,6 +88,19 @@ export function AccountScreen({ navigation }: Props) {
         user.firstName ?? credential.fullName?.givenName ?? undefined,
       );
       setAuth(user);
+
+      // Push onboarding data to backend profile
+      try {
+        await syncOnboardingToBackend({
+          metabolicType: state.user.metabolicType,
+          quizAnswers: state.user.quizAnswers,
+          tastePreferences: state.user.tastePreferences,
+          dietaryRestrictions: state.user.dietaryRestrictions,
+        });
+      } catch {
+        // Non-blocking: onboarding completes even if sync fails
+      }
+
       completeOnboarding();
     } catch (err: any) {
       if (err.code === "ERR_REQUEST_CANCELED") return;

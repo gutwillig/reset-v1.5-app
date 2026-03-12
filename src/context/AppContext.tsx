@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MetabolicType } from "../constants/colors";
 import { getTokens, clearTokens } from "../services/apiClient";
 import { fetchMe, AuthUser } from "../services/auth";
+import { getProfile } from "../services/profile";
 
 // State types
 interface UserProfile {
@@ -214,6 +215,37 @@ export function AppProvider({ children }: AppProviderProps) {
             type: "SET_AUTH",
             payload: { isAuthenticated: true, authUser },
           });
+
+          // If local state is missing onboarding data but backend has it (e.g. reinstall),
+          // restore from backend profile
+          const savedParsed = savedState ? JSON.parse(savedState) : null;
+          const localHasOnboarding = savedParsed?.user?.hasCompletedOnboarding;
+          if (!localHasOnboarding) {
+            try {
+              const profile = await getProfile();
+              if (profile.onboarding.onboardingComplete && profile.layer1.primaryBucket) {
+                dispatch({
+                  type: "SET_METABOLIC_TYPE",
+                  payload: profile.layer1.primaryBucket as MetabolicType,
+                });
+                if (profile.layer1.tasteCluster) {
+                  dispatch({
+                    type: "SET_TASTE_PREFERENCES",
+                    payload: [profile.layer1.tasteCluster],
+                  });
+                }
+                if (profile.layer1.dietaryRestrictions.length > 0) {
+                  dispatch({
+                    type: "SET_DIETARY_RESTRICTIONS",
+                    payload: profile.layer1.dietaryRestrictions,
+                  });
+                }
+                dispatch({ type: "COMPLETE_ONBOARDING" });
+              }
+            } catch {
+              // Profile fetch failed — continue with local state
+            }
+          }
         } catch {
           // Token invalid/expired and refresh failed
           await clearTokens();

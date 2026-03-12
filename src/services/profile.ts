@@ -35,21 +35,40 @@ export interface Confidence {
   esterTier: "Pattern Acknowledgment" | "Observation" | "Interpretation" | "Prediction";
 }
 
+export interface OnboardingState {
+  quizAnswers: Record<string, string>;
+  onboardingStep: string | null;
+  onboardingComplete: boolean;
+}
+
 export interface UserProfile {
   userId: string;
   layer1: Layer1;
   layer2: Layer2;
   layer3: Layer3;
   confidence: Confidence;
+  onboarding: OnboardingState;
 }
 
 export async function getProfile(): Promise<UserProfile> {
   return apiClient<UserProfile>("/api/profile");
 }
 
+export interface UpdateProfileData {
+  primaryBucket?: string;
+  secondaryBucket?: string;
+  energyPattern?: string;
+  cravingType?: string;
+  dietaryRestrictions?: string[];
+  tasteCluster?: string;
+  quizAnswers?: Record<string, string>;
+  onboardingStep?: string;
+  onboardingComplete?: boolean;
+}
+
 export async function updateProfile(
-  data: Partial<Layer1>,
-): Promise<{ message: string; profile: Layer1 }> {
+  data: UpdateProfileData,
+): Promise<{ message: string }> {
   return apiClient("/api/profile", {
     method: "PATCH",
     body: JSON.stringify(data),

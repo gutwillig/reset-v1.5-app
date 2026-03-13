@@ -56,3 +56,100 @@ export async function getFavorites(
   const params = mealType ? `?mealType=${mealType}` : "";
   return apiClient<MealFavorite[]>(`/api/meals/favorites${params}`);
 }
+
+// --- Daily Meal Plan API ---
+
+export interface DailyPlanMeal {
+  id: string;
+  name: string;
+  whyLine: string;
+  calories: number;
+  protein: number;
+  prepTime: number;
+  time: "breakfast" | "lunch" | "dinner" | "snack";
+  imageUrl?: string;
+  iliScore?: number;
+  inflammatoryIndex?: "pro" | "neutral" | "anti";
+  foodQuality?: "whole" | "minimally_processed" | "ultra_processed";
+  primaryProtein?: string;
+  cuisineCluster?: string;
+}
+
+export interface DailyPlan {
+  id: string;
+  date: string;
+  metabolicType: string;
+  cyclePhase?: string;
+  breakfast: DailyPlanMeal[];
+  lunch: DailyPlanMeal[];
+  dinner: DailyPlanMeal[];
+  snack?: DailyPlanMeal;
+}
+
+const DAILY_PLAN_CACHE_KEY = "@reset_daily_plan";
+
+export async function getDailyPlan(date?: string): Promise<DailyPlan> {
+  const dateParam = date || new Date().toISOString().split("T")[0];
+  return apiClient<DailyPlan>(`/api/meals/daily-plan?date=${dateParam}`);
+}
+
+export async function refreshDailyPlan(): Promise<DailyPlan> {
+  return apiClient<DailyPlan>("/api/meals/daily-plan/refresh", {
+    method: "POST",
+  });
+}
+
+export async function replaceMealInSlot(
+  planId: string,
+  slot: string,
+  excludeMealIds: string[],
+): Promise<DailyPlan> {
+  return apiClient<DailyPlan>("/api/meals/daily-plan/replace", {
+    method: "POST",
+    body: JSON.stringify({ planId, slot, excludeMealIds }),
+  });
+}
+
+// --- Meal Feedback API ---
+
+export interface MealFeedbackPayload {
+  mealId: string;
+  planId?: string;
+  slot: string;
+  feedback: "up" | "down";
+  tags?: string[];
+}
+
+export async function submitMealFeedback(
+  payload: MealFeedbackPayload,
+): Promise<{ success: boolean }> {
+  return apiClient<{ success: boolean }>("/api/meals/feedback", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getMealFeedback(
+  mealIds: string[],
+): Promise<Record<string, { feedback: "up" | "down"; tags: string[] }>> {
+  if (mealIds.length === 0) return {};
+  return apiClient<Record<string, { feedback: "up" | "down"; tags: string[] }>>(
+    `/api/meals/feedback?mealIds=${mealIds.join(",")}`,
+  );
+}
+
+// --- Daily Plan Offline Cache ---
+
+export async function cacheDailyPlan(plan: DailyPlan): Promise<void> {
+  await AsyncStorage.setItem(DAILY_PLAN_CACHE_KEY, JSON.stringify(plan));
+}
+
+export async function getCachedDailyPlan(): Promise<DailyPlan | null> {
+  const raw = await AsyncStorage.getItem(DAILY_PLAN_CACHE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as DailyPlan;
+  } catch {
+    return null;
+  }
+}

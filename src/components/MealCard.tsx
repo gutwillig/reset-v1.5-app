@@ -25,6 +25,12 @@ export interface Meal {
   prepTime: number; // in minutes
   time: "breakfast" | "lunch" | "dinner" | "snack";
   imageUrl?: string;
+  // Meal engine fields
+  iliScore?: number;
+  inflammatoryIndex?: "pro" | "neutral" | "anti";
+  foodQuality?: "whole" | "minimally_processed" | "ultra_processed";
+  primaryProtein?: string;
+  cuisineCluster?: string;
 }
 
 // Feedback tags when thumbs down is selected
@@ -39,18 +45,27 @@ interface MealCardProps {
   meal: Meal;
   metabolicType?: MetabolicType;
   isFavorited?: boolean;
+  initialFeedback?: "up" | "down" | null;
+  initialTags?: string[];
   onPress?: () => void;
   onFeedback?: (feedback: "up" | "down", tags?: string[]) => void;
   onChatPress?: () => void;
   onRecipePress?: () => void;
   onFavoriteToggle?: (isFavorited: boolean) => void;
+  onReplace?: () => void;  // "Get different option" callback
 }
 
-export function MealCard({ meal, metabolicType, isFavorited = false, onPress, onFeedback, onChatPress, onRecipePress, onFavoriteToggle }: MealCardProps) {
-  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+export function MealCard({ meal, metabolicType, isFavorited = false, initialFeedback = null, initialTags = [], onPress, onFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace }: MealCardProps) {
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(initialFeedback);
   const [showTags, setShowTags] = useState(false);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialTags);
   const [favorited, setFavorited] = useState(isFavorited);
+
+  // Sync feedback and tags when props change (e.g., loaded from API)
+  useEffect(() => {
+    setFeedback(initialFeedback);
+    if (initialTags.length > 0) setSelectedTags(initialTags);
+  }, [initialFeedback]);
 
   // Sync local state when prop changes (e.g., favorites loaded from API)
   useEffect(() => {
@@ -58,14 +73,20 @@ export function MealCard({ meal, metabolicType, isFavorited = false, onPress, on
   }, [isFavorited]);
 
   const handleThumbsUp = () => {
+    if (feedback === "up") return; // Already sent — don't re-send
     setFeedback("up");
     setShowTags(false);
     onFeedback?.("up");
   };
 
   const handleThumbsDown = () => {
-    setFeedback("down");
-    setShowTags(true);
+    if (feedback === "down") {
+      // Already down — toggle tags panel visibility
+      setShowTags((prev) => !prev);
+    } else {
+      setFeedback("down");
+      setShowTags(true);
+    }
   };
 
   const toggleTag = (tagId: string) => {
@@ -77,7 +98,16 @@ export function MealCard({ meal, metabolicType, isFavorited = false, onPress, on
   };
 
   const submitFeedback = () => {
-    onFeedback?.("down", selectedTags);
+    // Only send to backend if tags actually changed
+    const sorted = [...selectedTags].sort();
+    const sortedInitial = [...initialTags].sort();
+    const changed = feedback !== initialFeedback ||
+      sorted.length !== sortedInitial.length ||
+      sorted.some((t, i) => t !== sortedInitial[i]);
+
+    if (changed) {
+      onFeedback?.("down", selectedTags);
+    }
     setShowTags(false);
   };
 
@@ -205,6 +235,14 @@ export function MealCard({ meal, metabolicType, isFavorited = false, onPress, on
                 <Text style={styles.submitText}>Submit</Text>
               </TouchableOpacity>
             )}
+            {onReplace && (
+              <TouchableOpacity style={styles.replaceButton} onPress={() => {
+                submitFeedback();
+                onReplace();
+              }}>
+                <Text style={styles.replaceText}>Get different option</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -218,14 +256,16 @@ interface MealCardSlotProps {
   label: string;
   metabolicType?: MetabolicType;
   favoritedMealIds?: Set<string>;
+  mealFeedback?: Record<string, { feedback: "up" | "down"; tags: string[] }>;
   onMealPress?: (meal: Meal) => void;
   onFeedback?: (mealId: string, feedback: "up" | "down", tags?: string[]) => void;
   onChatPress?: (meal: Meal) => void;
   onRecipePress?: (meal: Meal) => void;
   onFavoriteToggle?: (mealId: string, isFavorited: boolean) => void;
+  onReplace?: (mealId: string, slot: string) => void;
 }
 
-export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, onMealPress, onFeedback, onChatPress, onRecipePress, onFavoriteToggle }: MealCardSlotProps) {
+export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, mealFeedback, onMealPress, onFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace }: MealCardSlotProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -265,11 +305,14 @@ export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, on
               meal={meal}
               metabolicType={metabolicType}
               isFavorited={favoritedMealIds?.has(meal.id)}
+              initialFeedback={mealFeedback?.[meal.id]?.feedback ?? null}
+              initialTags={mealFeedback?.[meal.id]?.tags ?? []}
               onPress={() => onMealPress?.(meal)}
               onFeedback={(fb, tags) => onFeedback?.(meal.id, fb, tags)}
               onChatPress={onChatPress ? () => onChatPress(meal) : undefined}
               onRecipePress={onRecipePress ? () => onRecipePress(meal) : undefined}
               onFavoriteToggle={onFavoriteToggle ? (fav) => onFavoriteToggle(meal.id, fav) : undefined}
+              onReplace={onReplace ? () => onReplace(meal.id, label.toLowerCase()) : undefined}
             />
           </View>
         ))}
@@ -468,6 +511,19 @@ const styles = StyleSheet.create({
   submitText: {
     ...typography.caption,
     color: K.bone,
+    fontWeight: "600",
+  },
+  replaceButton: {
+    marginTop: spacing.sm,
+    backgroundColor: K.blue,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    alignSelf: "flex-start",
+  },
+  replaceText: {
+    ...typography.caption,
+    color: K.brown,
     fontWeight: "600",
   },
 });

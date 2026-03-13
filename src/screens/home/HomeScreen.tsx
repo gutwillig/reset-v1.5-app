@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -17,7 +17,19 @@ import type { Meal } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { generateGreeting, getDayNumber } from "../../services/greetings";
 import { getMealsForSlot } from "../../data/meals";
-import { getFavorites, addFavorite, removeFavorite } from "../../services/meals";
+import {
+  getFavorites,
+  addFavorite,
+  removeFavorite,
+  getDailyPlan,
+  submitMealFeedback,
+  getMealFeedback,
+  refreshDailyPlan,
+  replaceMealInSlot,
+  cacheDailyPlan,
+  getCachedDailyPlan,
+} from "../../services/meals";
+import type { DailyPlan, DailyPlanMeal } from "../../services/meals";
 import { submitCheckIn, getTodayCheckIn } from "../../services/checkIn";
 
 export function HomeScreen() {
@@ -49,6 +61,10 @@ export function HomeScreen() {
   const [nudge, setNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(
     NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.")
   );
+  const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [mealFeedback, setMealFeedback] = useState<Record<string, { feedback: "up" | "down"; tags: string[] }>>({});
 
   // Load favorites and check today's check-in on mount
   useEffect(() => {
@@ -65,10 +81,63 @@ export function HomeScreen() {
       .catch(() => {}); // Silently fail if not authenticated yet
   }, []);
 
-  // Get type-specific meals for each slot (3 options per slot)
-  const breakfastMeals = getMealsForSlot(metabolicType, "breakfast");
-  const lunchMeals = getMealsForSlot(metabolicType, "lunch");
-  const dinnerMeals = getMealsForSlot(metabolicType, "dinner");
+  // Load daily meal plan from API
+  useEffect(() => {
+    loadDailyPlan();
+  }, []);
+
+  const loadDailyPlan = async () => {
+    setPlanLoading(true);
+    try {
+      const plan = await getDailyPlan();
+      setDailyPlan(plan);
+      cacheDailyPlan(plan);
+      loadFeedbackForPlan(plan);
+    } catch {
+      // Try cached plan
+      const cached = await getCachedDailyPlan();
+      if (cached) {
+        setDailyPlan(cached);
+        loadFeedbackForPlan(cached);
+      }
+      // Falls through to static data if no cache
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const loadFeedbackForPlan = async (plan: DailyPlan) => {
+    const allMealIds = [
+      ...plan.breakfast.map((m) => m.id),
+      ...plan.lunch.map((m) => m.id),
+      ...plan.dinner.map((m) => m.id),
+    ];
+    try {
+      const fb = await getMealFeedback(allMealIds);
+      setMealFeedback(fb);
+    } catch {
+      // Non-critical — cards just won't show prior feedback
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const plan = await refreshDailyPlan();
+      setDailyPlan(plan);
+      cacheDailyPlan(plan);
+      loadFeedbackForPlan(plan);
+    } catch {
+      // Keep current plan
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Use API plan if available, fallback to static data
+  const breakfastMeals = dailyPlan?.breakfast ?? getMealsForSlot(metabolicType, "breakfast");
+  const lunchMeals = dailyPlan?.lunch ?? getMealsForSlot(metabolicType, "lunch");
+  const dinnerMeals = dailyPlan?.dinner ?? getMealsForSlot(metabolicType, "dinner");
 
   const handleMealPress = (meal: Meal) => {
     // Navigate to recipe detail when card is tapped
@@ -87,8 +156,29 @@ export function HomeScreen() {
     navigation.navigate("EsterChat", { context: "meal", meal });
   };
 
-  const handleFeedback = (mealId: string, feedback: "up" | "down", tags?: string[]) => {
-    console.log("Feedback:", mealId, feedback, tags);
+  const handleFeedback = async (mealId: string, feedback: "up" | "down", tags?: string[]) => {
+    // Determine the slot from the meal
+    const slot = breakfastMeals.find(m => m.id === mealId) ? "breakfast"
+      : lunchMeals.find(m => m.id === mealId) ? "lunch"
+      : "dinner";
+
+    // Optimistic update
+    setMealFeedback((prev) => ({
+      ...prev,
+      [mealId]: { feedback, tags: tags || [] },
+    }));
+
+    try {
+      await submitMealFeedback({
+        mealId,
+        planId: dailyPlan?.id,
+        slot,
+        feedback,
+        tags,
+      });
+    } catch {
+      // Feedback still recorded locally via optimistic update
+    }
   };
 
   const handleFavoriteToggle = async (mealId: string) => {
@@ -123,6 +213,21 @@ export function HomeScreen() {
     }
   };
 
+  const handleReplace = async (mealId: string, slot: string) => {
+    if (!dailyPlan) return;
+    const currentSlotMeals = slot === "breakfast" ? breakfastMeals
+      : slot === "lunch" ? lunchMeals
+      : dinnerMeals;
+    const excludeIds = currentSlotMeals.map(m => m.id);
+    try {
+      const updatedPlan = await replaceMealInSlot(dailyPlan.id, slot, excludeIds);
+      setDailyPlan(updatedPlan);
+      cacheDailyPlan(updatedPlan);
+    } catch {
+      // Keep current plan if replacement fails
+    }
+  };
+
   const handleCheckInComplete = async (data: any) => {
     try {
       await submitCheckIn({
@@ -142,6 +247,13 @@ export function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={K.ochre}
+          />
+        }
       >
         {/* SLOT: Greeting card - dynamic message based on signals */}
         <View style={styles.greetingSlot}>
@@ -158,17 +270,27 @@ export function HomeScreen() {
           </View>
         )}
 
+        {/* Loading state for meal plan */}
+        {planLoading && !dailyPlan && breakfastMeals.length === 0 && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={K.ochre} />
+            <Text style={styles.loadingText}>Loading your personalized meals...</Text>
+          </View>
+        )}
+
         {/* SLOT: Meal Cards - Breakfast */}
         <MealCardSlot
           label="Breakfast"
           meals={breakfastMeals}
           metabolicType={metabolicType}
           favoritedMealIds={favoritedMeals}
+          mealFeedback={mealFeedback}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
           onFavoriteToggle={handleFavoriteToggle}
+          onReplace={handleReplace}
         />
 
         {/* SLOT: Meal Cards - Lunch */}
@@ -177,11 +299,13 @@ export function HomeScreen() {
           meals={lunchMeals}
           metabolicType={metabolicType}
           favoritedMealIds={favoritedMeals}
+          mealFeedback={mealFeedback}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
           onFavoriteToggle={handleFavoriteToggle}
+          onReplace={handleReplace}
         />
 
         {/* SLOT: Meal Cards - Dinner */}
@@ -190,11 +314,13 @@ export function HomeScreen() {
           meals={dinnerMeals}
           metabolicType={metabolicType}
           favoritedMealIds={favoritedMeals}
+          mealFeedback={mealFeedback}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
           onFavoriteToggle={handleFavoriteToggle}
+          onReplace={handleReplace}
         />
 
         {/* SLOT: Check-in prompt */}
@@ -295,5 +421,14 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
     backgroundColor: K.border,
+  },
+  loadingContainer: {
+    paddingVertical: spacing.xxl,
+    alignItems: "center",
+  },
+  loadingText: {
+    ...typography.bodySmall,
+    color: K.textMuted,
+    marginTop: spacing.md,
   },
 });

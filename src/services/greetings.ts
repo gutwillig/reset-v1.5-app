@@ -8,6 +8,16 @@ interface GreetingContext {
   userName?: string;
 }
 
+// Deterministic daily index — same value all day, changes with the date
+function dailyIndex(count: number): number {
+  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  let hash = 0;
+  for (let i = 0; i < today.length; i++) {
+    hash = (hash * 31 + today.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % count;
+}
+
 // Time-of-day prefix
 function getTimeGreeting(): string {
   const hour = new Date().getHours();
@@ -46,7 +56,7 @@ function getEarlyDayGreeting(ctx: GreetingContext): string {
   };
 
   const dayLines = lines[ctx.dayNumber] || lines[4];
-  return dayLines[Math.floor(Math.random() * dayLines.length)];
+  return dayLines[dailyIndex(dayLines.length)];
 }
 
 // Day 5–7 greetings — building confidence
@@ -57,7 +67,7 @@ function getMidWeekGreeting(ctx: GreetingContext): string {
     "Almost a full week. Your data is telling a clear story now.",
     `I'm getting confident in your pattern. Today's meals are tuned for a ${type.name.toLowerCase()}.`,
   ];
-  return lines[Math.floor(Math.random() * lines.length)];
+  return lines[dailyIndex(lines.length)];
 }
 
 // Day 8+ greetings
@@ -70,7 +80,7 @@ function getOngoingGreeting(ctx: GreetingContext): string {
       `I see the pattern from this week. Adjusting today's meals accordingly.`,
       `Your ${type.signals.stress} stress signal is informing today's plan.`,
     ];
-    return lines[Math.floor(Math.random() * lines.length)];
+    return lines[dailyIndex(lines.length)];
   }
 
   // Free users get single bucket-level line

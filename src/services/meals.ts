@@ -103,10 +103,11 @@ export async function replaceMealInSlot(
   planId: string,
   slot: string,
   excludeMealIds: string[],
+  replaceMealId: string,
 ): Promise<DailyPlan> {
   return apiClient<DailyPlan>("/api/meals/daily-plan/replace", {
     method: "POST",
-    body: JSON.stringify({ planId, slot, excludeMealIds }),
+    body: JSON.stringify({ planId, slot, excludeMealIds, replaceMealId }),
   });
 }
 

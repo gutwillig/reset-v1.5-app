@@ -24,9 +24,13 @@ export interface ChatSession {
 export async function sendMessage(
   message: string,
   chatSessionId?: string,
+  systemContext?: string,
+  assistantGreeting?: string,
 ): Promise<ChatMessage> {
-  const body: Record<string, string> = { message };
+  const body: Record<string, unknown> = { message };
   if (chatSessionId) body.chatSessionId = chatSessionId;
+  if (systemContext) body.systemContext = systemContext;
+  if (assistantGreeting) body.assistantGreeting = assistantGreeting;
 
   return apiClient<ChatMessage>("/api/chat/send", {
     method: "POST",

@@ -67,59 +67,66 @@ export function EsterChatScreen() {
   // Load existing session and messages on mount
   useEffect(() => {
     async function loadChatHistory() {
-      // If opening with a meal context, always start a fresh session
-      if (meal) {
-        setMessages([{
-          id: "initial",
-          text: `Let's talk about ${meal.name}. What would you like to know — why I picked it, what you could swap, or something else?`,
-          sender: "ester",
-          timestamp: new Date(),
-        }]);
-        setIsLoadingHistory(false);
-        return;
-      }
-
       try {
         // If user tapped "new chat" before leaving, don't reload the old session
         const pendingNew = await AsyncStorage.getItem(PENDING_NEW_CHAT_KEY);
-        if (pendingNew) {
-          setMessages([defaultGreeting]);
-          setIsLoadingHistory(false);
-          return;
-        }
+        if (!pendingNew) {
+          const sessions = await getSessions();
+          if (sessions.length > 0) {
+            // Resume the most recent session (shared across meal + general)
+            const latestSession = sessions[0];
+            setChatSessionId(latestSession.id);
 
-        const sessions = await getSessions();
-        if (sessions.length > 0) {
-          // Resume the most recent session
-          const latestSession = sessions[0];
-          setChatSessionId(latestSession.id);
-
-          const history = await getSessionMessages(latestSession.id, 1, 50);
-          if (history.data.length > 0) {
-            // API returns newest-first, reverse to chronological order
-            const sorted = [...history.data].sort(
-              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-            );
-            const loaded: Message[] = [
-              // Prepend the greeting so there's always a welcome message at the top
-              defaultGreeting,
-              ...sorted.map((msg) => ({
-                id: msg.id,
-                text: msg.content,
-                sender: msg.role === "user" ? "user" as const : "ester" as const,
-                timestamp: new Date(msg.createdAt),
-              })),
-            ];
-            setMessages(loaded);
-            setIsLoadingHistory(false);
-            return;
+            const history = await getSessionMessages(latestSession.id, 1, 50);
+            if (history.data.length > 0) {
+              const sorted = [...history.data].sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+              );
+              // Use the earliest message timestamp to place the greeting before all history
+              const earliestTime = new Date(sorted[0].createdAt);
+              const greetingMsg: Message = {
+                ...defaultGreeting,
+                timestamp: new Date(earliestTime.getTime() - 1000),
+              };
+              const loaded: Message[] = [
+                greetingMsg,
+                ...sorted.map((msg) => ({
+                  id: msg.id,
+                  text: msg.content,
+                  sender: msg.role === "user" ? "user" as const : "ester" as const,
+                  timestamp: new Date(msg.createdAt),
+                })),
+              ];
+              // If entering from a meal card, append the meal greeting
+              if (meal) {
+                loaded.push({
+                  id: `meal-greeting-${Date.now()}`,
+                  text: `Let's talk about ${meal.name}. What would you like to know — why I picked it, what you could swap, or something else?`,
+                  sender: "ester",
+                  timestamp: new Date(),
+                });
+              }
+              setMessages(loaded);
+              setIsLoadingHistory(false);
+              return;
+            }
           }
         }
       } catch {
         // Fall through to default greeting
       }
 
-      setMessages([defaultGreeting]);
+      // No existing session — show appropriate greeting
+      const greeting: Message[] = [defaultGreeting];
+      if (meal) {
+        greeting.push({
+          id: `meal-greeting-${Date.now()}`,
+          text: `Let's talk about ${meal.name}. What would you like to know — why I picked it, what you could swap, or something else?`,
+          sender: "ester",
+          timestamp: new Date(),
+        });
+      }
+      setMessages(greeting);
       setIsLoadingHistory(false);
     }
 
@@ -143,15 +150,20 @@ export function EsterChatScreen() {
     setError(null);
 
     try {
-      // Prepend meal context on the first user message if chatting about a meal
-      const contextPrefix =
-        meal && !chatSessionId
-          ? `[Context: User is asking about their meal "${meal.name}" - ${meal.calories} cal, ${meal.protein}g protein. Why line: ${meal.whyLine}]\n\n`
-          : "";
+      // Pass meal context as system-level context (not embedded in user message)
+      const isNewMealChat = meal && !chatSessionId;
+      const systemContext = isNewMealChat
+        ? `[Context: User is asking about their meal "${meal.name}" - ${meal.calories} cal, ${meal.protein}g protein. Why line: ${meal.whyLine}]`
+        : undefined;
+      const assistantGreeting = isNewMealChat
+        ? `Let's talk about ${meal.name}. What would you like to know — why I picked it, what you could swap, or something else?`
+        : undefined;
 
       const response = await sendChatMessage(
-        contextPrefix + messageText,
+        messageText,
         chatSessionId,
+        systemContext,
+        assistantGreeting,
       );
 
       // Track the session for follow-up messages

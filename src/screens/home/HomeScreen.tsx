@@ -24,7 +24,6 @@ import {
   getDailyPlan,
   submitMealFeedback,
   getMealFeedback,
-  refreshDailyPlan,
   replaceMealInSlot,
   cacheDailyPlan,
   getCachedDailyPlan,
@@ -123,7 +122,7 @@ export function HomeScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const plan = await refreshDailyPlan();
+      const plan = await getDailyPlan();
       setDailyPlan(plan);
       cacheDailyPlan(plan);
       loadFeedbackForPlan(plan);
@@ -220,7 +219,7 @@ export function HomeScreen() {
       : dinnerMeals;
     const excludeIds = currentSlotMeals.map(m => m.id);
     try {
-      const updatedPlan = await replaceMealInSlot(dailyPlan.id, slot, excludeIds);
+      const updatedPlan = await replaceMealInSlot(dailyPlan.id, slot, excludeIds, mealId);
       setDailyPlan(updatedPlan);
       cacheDailyPlan(updatedPlan);
     } catch {

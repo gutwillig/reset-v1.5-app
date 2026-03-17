@@ -338,14 +338,14 @@ export function HomeScreen() {
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryValue}>
-                {breakfastMeals[0].calories + lunchMeals[0].calories + dinnerMeals[0].calories}
+                {Math.ceil(breakfastMeals[0].calories + lunchMeals[0].calories + dinnerMeals[0].calories)}
               </Text>
               <Text style={styles.summaryUnit}>calories</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
               <Text style={styles.summaryValue}>
-                {breakfastMeals[0].protein + lunchMeals[0].protein + dinnerMeals[0].protein}g
+                {Math.ceil(breakfastMeals[0].protein + lunchMeals[0].protein + dinnerMeals[0].protein)}g
               </Text>
               <Text style={styles.summaryUnit}>protein</Text>
             </View>

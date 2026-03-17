@@ -152,10 +152,10 @@ export function MealCard({ meal, metabolicType, isFavorited = false, initialFeed
         {/* Nutrition badge */}
         <View style={styles.nutritionRow}>
           <View style={styles.nutritionBadge}>
-            <Text style={styles.nutritionText}>{meal.calories} cal</Text>
+            <Text style={styles.nutritionText}>{Math.ceil(meal.calories)} cal</Text>
           </View>
           <View style={styles.nutritionBadge}>
-            <Text style={styles.nutritionText}>{meal.protein}g protein</Text>
+            <Text style={styles.nutritionText}>{Math.ceil(meal.protein)}g protein</Text>
           </View>
         </View>
 

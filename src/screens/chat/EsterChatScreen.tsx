@@ -414,8 +414,10 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   contextMeal: {
-    ...typography.bodyMedium,
+    ...typography.caption,
     color: K.brown,
+    fontWeight: "600",
+    flexShrink: 1,
   },
   loadingContainer: {
     flex: 1,

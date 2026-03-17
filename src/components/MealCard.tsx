@@ -160,12 +160,19 @@ export function MealCard({ meal, metabolicType, isFavorited = false, initialFeed
         </View>
 
         {/* Personalized Why Section */}
-        {metabolicType && (
+        {metabolicType && meal.whyLine ? (
           <View style={styles.whySection}>
             <Text style={styles.whyHeader}>For {metabolicType}s:</Text>
-            <Text style={styles.whyExplanation}>{meal.whyLine}</Text>
+            <Text style={styles.whyExplanation} numberOfLines={2}>
+              {meal.whyLine}
+            </Text>
+            {meal.whyLine.length > 80 && onRecipePress && (
+              <TouchableOpacity onPress={onRecipePress}>
+                <Text style={styles.moreLink}>more</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        )}
+        ) : null}
 
         {/* Feedback row */}
         <View style={styles.feedbackRow}>
@@ -395,6 +402,12 @@ const styles = StyleSheet.create({
     color: K.brown,
     fontStyle: "italic",
     lineHeight: 18,
+  },
+  moreLink: {
+    ...typography.caption,
+    color: K.ochre,
+    fontWeight: "600",
+    marginTop: 2,
   },
   content: {
     padding: spacing.md,

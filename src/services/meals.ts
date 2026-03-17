@@ -111,6 +111,47 @@ export async function replaceMealInSlot(
   });
 }
 
+// --- Meal Detail API ---
+
+export interface MealDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  instructions: string | null;
+  imageAsset: string | null;
+  prepTime: number | null;
+  cookTimeMinutes: number | null;
+  readyInMinutes: number | null;
+  servingsMin: number | null;
+  calories: number | null;
+  proteinGrams: number | null;
+  fatGrams: number | null;
+  carbsGrams: number | null;
+  fiberGrams: number | null;
+}
+
+export interface MealIngredient {
+  id: string;
+  quantity: number;
+  measurement: string;
+  representText: string | null;
+  ingredient: {
+    id: string;
+    name: string;
+    imageUrl: string | null;
+  };
+}
+
+export async function getMealDetail(mealId: string): Promise<MealDetail> {
+  return apiClient<MealDetail>(`/api/meals/${mealId}`);
+}
+
+export async function getMealIngredients(
+  mealId: string,
+): Promise<MealIngredient[]> {
+  return apiClient<MealIngredient[]>(`/api/meals/${mealId}/ingredients`);
+}
+
 // --- Meal Feedback API ---
 
 export interface MealFeedbackPayload {

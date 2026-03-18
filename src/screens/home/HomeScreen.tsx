@@ -15,6 +15,7 @@ import {
 } from "../../components";
 import type { Meal } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt";
 import { generateGreeting, getDayNumber } from "../../services/greetings";
 import { getMealsForSlot } from "../../data/meals";
 import {
@@ -64,6 +65,8 @@ export function HomeScreen() {
   const [planLoading, setPlanLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mealFeedback, setMealFeedback] = useState<Record<string, { feedback: "up" | "down"; tags: string[] }>>({});
+
+  const { showPrompt, promptMeal, promptSlot, dismissPrompt, recordMealTap } = useFeedbackPrompt(dailyPlan, dayNumber);
 
   // Load favorites and check today's check-in on mount
   useEffect(() => {
@@ -139,7 +142,7 @@ export function HomeScreen() {
   const dinnerMeals = dailyPlan?.dinner ?? getMealsForSlot(metabolicType, "dinner");
 
   const handleMealPress = (meal: Meal) => {
-    // Navigate to recipe detail when card is tapped
+    recordMealTap();
     navigation.navigate("RecipeDetail", { meal });
   };
 
@@ -266,6 +269,16 @@ export function HomeScreen() {
         {nudge && (
           <View style={styles.nudgeSlot}>
             <NudgeSlot content={nudge} onDismiss={handleNudgeDismiss} />
+          </View>
+        )}
+
+        {/* SLOT: Feedback prompt (shows after meals, lower priority than check-in) */}
+        {showPrompt && !showCheckIn && promptMeal && (
+          <View style={styles.nudgeSlot}>
+            <NudgeSlot
+              content={NudgeContent.feedbackPrompt(promptMeal.name)}
+              onDismiss={dismissPrompt}
+            />
           </View>
         )}
 

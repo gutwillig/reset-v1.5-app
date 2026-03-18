@@ -135,6 +135,12 @@ export const NudgeContent = {
     message,
     action,
   }),
+
+  feedbackPrompt: (mealName: string): NudgeContent => ({
+    type: "observation",
+    title: "How was your meal?",
+    message: `How did the ${mealName} work for you? Scroll down to rate it.`,
+  }),
 };
 
 const styles = StyleSheet.create({

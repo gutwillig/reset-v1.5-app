@@ -19,6 +19,7 @@ import { EsterBubble, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { registerWithEmail, loginWithApple } from "../../services/auth";
 import { syncOnboardingToBackend } from "../../services/onboarding";
+import { submitScanResults } from "../../services/profile";
 
 type Props = NativeStackScreenProps<any, "Account">;
 
@@ -57,6 +58,15 @@ export function AccountScreen({ navigation }: Props) {
         });
       } catch {
         // Non-blocking: onboarding completes even if sync fails
+      }
+
+      // Submit queued scan data if user completed a scan during onboarding
+      if (state.biometrics?.raw) {
+        try {
+          await submitScanResults(state.biometrics.raw);
+        } catch {
+          // Non-blocking: scan upload can be retried later
+        }
       }
 
       completeOnboarding();
@@ -99,6 +109,15 @@ export function AccountScreen({ navigation }: Props) {
         });
       } catch {
         // Non-blocking: onboarding completes even if sync fails
+      }
+
+      // Submit queued scan data if user completed a scan during onboarding
+      if (state.biometrics?.raw) {
+        try {
+          await submitScanResults(state.biometrics.raw);
+        } catch {
+          // Non-blocking: scan upload can be retried later
+        }
       }
 
       completeOnboarding();

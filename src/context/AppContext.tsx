@@ -16,11 +16,26 @@ interface UserProfile {
   hasCompletedOnboarding: boolean;
 }
 
+interface ScanResultsRaw {
+  heartRate: number;
+  stressIndex: number | null;
+  hrvSdnn: number | null;
+  hrvLnrmssd: number | null;
+  breathingRate: number | null;
+  systolicBP: number | null;
+  diastolicBP: number | null;
+  parasympatheticActivity: number | null;
+  cardiacWorkload: number | null;
+  ageEstimate: number | null;
+  signalQuality: number;
+}
+
 interface BiometricData {
   stressIndex: number;
   heartRate: number;
   wellness: number;
   vascularAge: number;
+  raw?: ScanResultsRaw;
 }
 
 interface AuthState {

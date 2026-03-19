@@ -74,3 +74,12 @@ export async function updateProfile(
     body: JSON.stringify(data),
   });
 }
+
+export async function submitScanResults(
+  scanData: Record<string, any>,
+): Promise<{ message: string; scanCount: number; confidenceLayer3: number }> {
+  return apiClient("/api/profile/scan", {
+    method: "POST",
+    body: JSON.stringify({ scanData }),
+  });
+}

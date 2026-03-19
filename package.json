@@ -18,12 +18,14 @@
     "expo": "~55.0.4",
     "expo-apple-authentication": "~55.0.8",
     "expo-camera": "^55.0.9",
+    "expo-constants": "^55.0.8",
     "expo-font": "~55.0.4",
     "expo-status-bar": "~55.0.4",
     "react": "19.2.0",
     "react-native": "0.83.2",
     "react-native-safe-area-context": "^5.7.0",
-    "react-native-screens": "^4.24.0"
+    "react-native-screens": "^4.24.0",
+    "react-native-shenai-sdk": "file:./react-native-shenai-sdk"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

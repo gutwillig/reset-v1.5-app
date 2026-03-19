@@ -25,6 +25,8 @@ type Props = NativeStackScreenProps<any, "Account">;
 
 export function AccountScreen({ navigation }: Props) {
   const { state, setUserAccount, setAuth, completeOnboarding } = useApp();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -44,8 +46,14 @@ export function AccountScreen({ navigation }: Props) {
     setIsLoading(true);
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const user = await registerWithEmail(email, password, timezone);
-      setUserAccount(user.email ?? email, user.firstName ?? undefined);
+      const user = await registerWithEmail(
+        email,
+        password,
+        timezone,
+        firstName.trim() || undefined,
+        lastName.trim() || undefined,
+      );
+      setUserAccount(user.email ?? email, user.firstName ?? (firstName.trim() || undefined));
       setAuth(user);
 
       // Push onboarding data to backend profile
@@ -149,6 +157,35 @@ export function AccountScreen({ navigation }: Props) {
               </View>
             )}
 
+            <View style={styles.nameRow}>
+              <View style={[styles.inputGroup, styles.nameField]}>
+                <Text style={styles.label}>First name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  placeholder="First"
+                  placeholderTextColor={K.faded}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </View>
+              <View style={[styles.inputGroup, styles.nameField]}>
+                <Text style={styles.label}>Last name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={lastName}
+                  onChangeText={setLastName}
+                  placeholder="Last"
+                  placeholderTextColor={K.faded}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </View>
+            </View>
+
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
               <TextInput
@@ -250,6 +287,13 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.bodySmall,
     color: K.err,
+  },
+  nameRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  nameField: {
+    flex: 1,
   },
   inputGroup: {
     gap: 8,

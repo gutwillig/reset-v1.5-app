@@ -15,10 +15,12 @@ export async function registerWithEmail(
   email: string,
   password: string,
   timezone?: string,
+  firstName?: string,
+  lastName?: string,
 ): Promise<AuthUser> {
   const data = await apiClient("/api/auth/register/email", {
     method: "POST",
-    body: JSON.stringify({ email, password, timezone }),
+    body: JSON.stringify({ email, password, firstName, lastName, timezone }),
   });
 
   // Register endpoint returns {id, email, firstName, lastName, token, deviceId}

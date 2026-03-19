@@ -1,0 +1,4 @@
+react-native-shenai-sdk/**/ShenaiSDK filter=lfs diff=lfs merge=lfs -text
+react-native-shenai-sdk/**/*.aar filter=lfs diff=lfs merge=lfs -text
+react-native-shenai-sdk/ios/ShenaiSDK.xcframework/ios-arm64/ShenaiSDK.framework/ShenaiSDK filter=lfs diff=lfs merge=lfs -text
+react-native-shenai-sdk/ios/ShenaiSDK.xcframework/ios-arm64_x86_64-simulator/ShenaiSDK.framework/ShenaiSDK filter=lfs diff=lfs merge=lfs -text

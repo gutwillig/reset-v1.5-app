@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_BASE_URL = "http://localhost:3003";
+const API_BASE_URL = __DEV__ ? "http://192.168.1.217:3003" : "http://localhost:3003";
 
 const TOKEN_KEYS = {
   access: "@reset_access_token",

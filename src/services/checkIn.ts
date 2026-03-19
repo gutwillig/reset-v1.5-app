@@ -34,3 +34,21 @@ export async function getTodayCheckIn() {
     "/api/check-in/today",
   );
 }
+
+export interface CheckInEntry {
+  id: string;
+  date: string;
+  energy: string;
+  stressTags: string[];
+  sleepHours: number | null;
+  sleepQuality: string | null;
+}
+
+export async function getCheckInHistory(
+  limit = 30,
+): Promise<CheckInEntry[]> {
+  const res = await apiClient<{ checkIns: CheckInEntry[] }>(
+    `/api/check-in/history?limit=${limit}`,
+  );
+  return res.checkIns ?? [];
+}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -16,7 +16,14 @@ import {
 import type { Meal } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt";
-import { generateGreeting, getDayNumber } from "../../services/greetings";
+import {
+  generateGreeting,
+  generateSimpleGreeting,
+  getDayNumber,
+  detectLapseTier,
+  computeDaysSinceLastCheckIn,
+} from "../../services/greetings";
+import type { GreetingContext, GreetingResult } from "../../services/greetings";
 import { getMealsForSlot } from "../../data/meals";
 import {
   getFavorites,
@@ -30,7 +37,10 @@ import {
   getCachedDailyPlan,
 } from "../../services/meals";
 import type { DailyPlan, DailyPlanMeal } from "../../services/meals";
-import { submitCheckIn, getTodayCheckIn } from "../../services/checkIn";
+import { submitCheckIn, getTodayCheckIn, getCheckInHistory } from "../../services/checkIn";
+import type { CheckInEntry } from "../../services/checkIn";
+import { getProfile } from "../../services/profile";
+import type { UserProfile } from "../../services/profile";
 
 export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
@@ -47,15 +57,63 @@ export function HomeScreen() {
   // Calculate day number from account creation
   const dayNumber = getDayNumber(state.auth.authUser?.createdAt);
 
-  // Generate personalized greeting
-  const greeting = generateGreeting({
-    metabolicType,
-    hasScan,
-    dayNumber,
-    userName,
-  });
+  // Profile + check-in history for rich greetings
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [checkInHistory, setCheckInHistory] = useState<CheckInEntry[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      getProfile().catch(() => null),
+      getCheckInHistory(30).catch(() => []),
+    ]).then(([prof, history]) => {
+      setProfile(prof);
+      setCheckInHistory(history);
+    });
+  }, []);
+
+  // Build greeting context — full when profile is loaded, simple fallback otherwise
+  const greeting: GreetingResult = (() => {
+    const base = { metabolicType, hasScan, dayNumber, userName };
+
+    if (!profile) {
+      return generateSimpleGreeting(base);
+    }
+
+    const daysSinceLastCheckIn = computeDaysSinceLastCheckIn(checkInHistory);
+    const checkInCount = profile.layer2.energyLog.length;
+    const mealFeedbackCount = profile.layer2.mealFeedback.length;
+    const lastEnergy = profile.layer2.energyLog.length > 0
+      ? profile.layer2.energyLog[profile.layer2.energyLog.length - 1].energy
+      : null;
+    const lastStress = profile.layer2.stressTags.length > 0
+      ? profile.layer2.stressTags[profile.layer2.stressTags.length - 1].tags
+      : [];
+
+    const ctx: GreetingContext = {
+      ...base,
+      checkInCount,
+      latestEnergy: lastEnergy,
+      latestStressTags: lastStress,
+      latestSleepQuality:
+        profile.layer2.sleepLog.length > 0
+          ? profile.layer2.sleepLog[profile.layer2.sleepLog.length - 1].quality
+          : null,
+      scanCount: profile.layer3.scanCount,
+      latestScan: profile.layer3.latestScan,
+      esterTier: profile.confidence.esterTier ?? "Pattern Acknowledgment",
+      compositeConfidence: profile.confidence.composite,
+      daysSinceLastCheckIn,
+      isGlanceOnly: dayNumber >= 5 && checkInCount === 0 && mealFeedbackCount === 0,
+      lapseTier: detectLapseTier(daysSinceLastCheckIn),
+      mealFeedbackCount,
+    };
+
+    return generateGreeting(ctx);
+  })();
 
   // UI State
+  const scrollRef = useRef<ScrollView>(null);
+  const checkInY = useRef(0);
   const [showCheckIn, setShowCheckIn] = useState(true);
   const [favoritedMeals, setFavoritedMeals] = useState<Set<string>>(new Set());
   const [nudge, setNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(
@@ -246,6 +304,7 @@ export function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -260,9 +319,22 @@ export function HomeScreen() {
         {/* SLOT: Greeting card - dynamic message based on signals */}
         <View style={styles.greetingSlot}>
           <EsterGreeting
-            message={userName ? `${greeting.timeGreeting}, ${userName}.` : `${greeting.timeGreeting}.`}
+            message={greeting.nameGreeting}
             subMessage={greeting.message}
           />
+          {greeting.embedAction === "energy_checkin" && (
+            <TouchableOpacity
+              onPress={() => {
+                setShowCheckIn(true);
+                setTimeout(() => {
+                  scrollRef.current?.scrollTo({ y: checkInY.current, animated: true });
+                }, 100);
+              }}
+              style={styles.embedAction}
+            >
+              <Text style={styles.embedActionText}>Quick check-in →</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* SLOT: Nudge (dismissible, collapses when dismissed) */}
@@ -337,7 +409,10 @@ export function HomeScreen() {
 
         {/* SLOT: Check-in prompt */}
         {showCheckIn && (
-          <View style={styles.checkInSlot}>
+          <View
+            style={styles.checkInSlot}
+            onLayout={(e) => { checkInY.current = e.nativeEvent.layout.y; }}
+          >
             <CheckIn
               onComplete={handleCheckInComplete}
               onDismiss={() => setShowCheckIn(false)}
@@ -346,29 +421,31 @@ export function HomeScreen() {
         )}
 
         {/* Daily summary */}
-        <View style={styles.summary}>
-          <Text style={styles.summaryLabel}>TODAY'S NUTRITION</Text>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>
-                {Math.ceil(breakfastMeals[0].calories + lunchMeals[0].calories + dinnerMeals[0].calories)}
-              </Text>
-              <Text style={styles.summaryUnit}>calories</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>
-                {Math.ceil(breakfastMeals[0].protein + lunchMeals[0].protein + dinnerMeals[0].protein)}g
-              </Text>
-              <Text style={styles.summaryUnit}>protein</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>3</Text>
-              <Text style={styles.summaryUnit}>meals</Text>
+        {breakfastMeals[0] && lunchMeals[0] && dinnerMeals[0] && (
+          <View style={styles.summary}>
+            <Text style={styles.summaryLabel}>TODAY'S NUTRITION</Text>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>
+                  {Math.ceil(breakfastMeals[0].calories + lunchMeals[0].calories + dinnerMeals[0].calories)}
+                </Text>
+                <Text style={styles.summaryUnit}>calories</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>
+                  {Math.ceil(breakfastMeals[0].protein + lunchMeals[0].protein + dinnerMeals[0].protein)}g
+                </Text>
+                <Text style={styles.summaryUnit}>protein</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>3</Text>
+                <Text style={styles.summaryUnit}>meals</Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -433,6 +510,19 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
     backgroundColor: K.border,
+  },
+  embedAction: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: K.bone,
+    borderRadius: radius.md,
+    alignSelf: "flex-start",
+  },
+  embedActionText: {
+    ...typography.bodySmall,
+    color: K.brown,
+    fontWeight: "600",
   },
   loadingContainer: {
     paddingVertical: spacing.xxl,

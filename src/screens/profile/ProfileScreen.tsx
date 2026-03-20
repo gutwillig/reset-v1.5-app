@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,23 +14,38 @@ import { typography, spacing, radius } from "../../constants/typography";
 import { TYPE_CONFIGS } from "../../constants/types";
 import { Avatar, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { getProfile, UserProfile } from "../../services/profile";
 
 type SubscriptionTier = "pro" | "free" | "none";
 
-// Mock LPD entries
-const MOCK_LPD_ENTRIES = [
-  { date: "Mar 4", note: "Steady energy after protein breakfast" },
-  { date: "Mar 3", note: "Afternoon slump — adjusted lunch for tomorrow" },
-  { date: "Mar 2", note: "Morning stress detected. Added calming dinner." },
-  { date: "Mar 1", note: "First day. Baseline established." },
-];
+function buildLpdEntries(profile: UserProfile): Array<{ date: string; note: string }> {
+  const entries: Array<{ date: string; note: string; sortKey: number }> = [];
 
-// Mock scan history
-const MOCK_SCAN_HISTORY = [
-  { date: "Mar 5, 2024", stressIndex: 68, wellness: 72 },
-  { date: "Feb 26, 2024", stressIndex: 74, wellness: 65 },
-  { date: "Feb 19, 2024", stressIndex: 71, wellness: 68 },
-];
+  for (const entry of profile.layer2.energyLog) {
+    const d = new Date(entry.date);
+    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const noteMap: Record<string, string> = {
+      high: "High energy reported. Meals are fueling well.",
+      steady: "Steady energy. Your pattern is holding.",
+      okay: "Moderate energy. Watching for patterns.",
+      low: "Low energy flagged. Adjusting tomorrow's meals.",
+    };
+    entries.push({ date: dateStr, note: noteMap[entry.energy] || `Energy: ${entry.energy}`, sortKey: d.getTime() });
+  }
+
+  for (const entry of profile.layer2.stressTags) {
+    if (entry.tags.length > 0) {
+      const d = new Date(entry.date);
+      const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      entries.push({ date: dateStr, note: `Stress signals: ${entry.tags.join(", ")}`, sortKey: d.getTime() });
+    }
+  }
+
+  return entries
+    .sort((a, b) => b.sortKey - a.sortKey)
+    .slice(0, 10)
+    .map(({ date, note }) => ({ date, note }));
+}
 
 export function ProfileScreen() {
   const navigation = useNavigation();
@@ -39,9 +54,47 @@ export function ProfileScreen() {
   const typeConfig = TYPE_CONFIGS[metabolicType];
   const colors = TC[metabolicType];
 
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    getProfile().then(setProfile).catch(() => null);
+  }, []);
+
   // Determine subscription tier
-  const tier: SubscriptionTier = state.biometrics ? "pro" : "free";
-  const hasScan = !!state.biometrics;
+  const tier: SubscriptionTier = (state.biometrics || (profile?.layer3.scanCount ?? 0) > 0) ? "pro" : "free";
+  const hasScan = !!state.biometrics || (profile?.layer3.scanCount ?? 0) > 0;
+
+  // LPD entries from live data
+  const lpdEntries = profile && profile.layer2.energyLog.length > 0
+    ? buildLpdEntries(profile)
+    : [{ date: "—", note: "No check-in data yet. Complete a check-in to start building your pattern." }];
+
+  // Scan history from live data
+  const scanHistoryRaw = profile?.layer3.scanHistory ?? [];
+  const scanEntries = scanHistoryRaw
+    .slice(-10)
+    .reverse()
+    .map((scan: Record<string, any>, i: number) => {
+      const raw = scan.scannedAt ?? scan.timestamp ?? scan.date;
+      const dateLabel = raw
+        ? new Date(raw).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+        : `Scan ${scanHistoryRaw.length - i}`;
+      return {
+        date: dateLabel,
+        stressIndex: scan.stressIndex ?? scan.stress_index ?? 0,
+        wellness: scan.wellness ?? Math.round(
+          ((scan.parasympatheticActivity ?? 50) * 0.6) + (((scan.hrvSdnn ?? 40) / 80) * 40)
+        ),
+      };
+    });
+
+  // Signal card values — overlay real scan data when available
+  const latestScan = profile?.layer3.latestScan;
+  const stressValue = latestScan ? `${latestScan.stressIndex ?? latestScan.stress_index}` : typeConfig.signals.stress;
+  const recoveryValue = latestScan
+    ? `${latestScan.parasympatheticActivity ?? latestScan.parasympathetic_activity ?? "—"}`
+    : typeConfig.signals.recovery;
+  const energyValue = typeConfig.signals.energy;
 
   const handleResetProfile = () => {
     Alert.alert(
@@ -101,6 +154,18 @@ export function ProfileScreen() {
           </View>
         </View>
 
+        {/* Confidence Score */}
+        {profile?.confidence && (
+          <View style={styles.confidenceRow}>
+            <Text style={styles.confidenceLabel}>
+              Ester confidence: {Math.round(profile.confidence.composite)}%
+            </Text>
+            <Text style={styles.confidenceTier}>
+              {profile.confidence.esterTier}
+            </Text>
+          </View>
+        )}
+
         {/* Signal Cards Grid */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>YOUR SIGNALS</Text>
@@ -108,23 +173,23 @@ export function ProfileScreen() {
             {/* Stress Card */}
             <View style={styles.signalCard}>
               {tier === "free" && <BlurOverlay />}
-              <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(typeConfig.signals.stress) }]} />
+              <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(latestScan ? "high" : typeConfig.signals.stress) }]} />
               <Text style={styles.signalCardLabel}>Stress</Text>
-              <Text style={styles.signalCardValue}>{typeConfig.signals.stress}</Text>
+              <Text style={styles.signalCardValue}>{latestScan ? `Stress: ${stressValue}` : stressValue}</Text>
             </View>
             {/* Energy Card */}
             <View style={styles.signalCard}>
               {tier === "free" && <BlurOverlay />}
               <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(typeConfig.signals.energy) }]} />
               <Text style={styles.signalCardLabel}>Energy</Text>
-              <Text style={styles.signalCardValue}>{typeConfig.signals.energy}</Text>
+              <Text style={styles.signalCardValue}>{energyValue}</Text>
             </View>
             {/* Recovery Card */}
             <View style={styles.signalCard}>
               {tier === "free" && <BlurOverlay />}
-              <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(typeConfig.signals.recovery) }]} />
+              <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(latestScan ? "building" : typeConfig.signals.recovery) }]} />
               <Text style={styles.signalCardLabel}>Recovery</Text>
-              <Text style={styles.signalCardValue}>{typeConfig.signals.recovery}</Text>
+              <Text style={styles.signalCardValue}>{latestScan ? `Recovery: ${recoveryValue}` : recoveryValue}</Text>
             </View>
           </View>
           {tier === "free" && (
@@ -146,7 +211,7 @@ export function ProfileScreen() {
           </View>
           <View style={styles.lpdContainer}>
             {tier === "free" && <BlurOverlay />}
-            {MOCK_LPD_ENTRIES.map((entry, i) => (
+            {lpdEntries.map((entry, i) => (
               <View key={i} style={styles.lpdEntry}>
                 <View style={styles.lpdDate}>
                   <Text style={styles.lpdDateText}>{entry.date}</Text>
@@ -158,11 +223,11 @@ export function ProfileScreen() {
         </View>
 
         {/* Scan History (only show if user has scanned) */}
-        {hasScan && (
+        {hasScan && scanEntries.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>SCAN HISTORY</Text>
             <View style={styles.scanHistory}>
-              {MOCK_SCAN_HISTORY.map((scan, i) => (
+              {scanEntries.map((scan, i) => (
                 <View key={i} style={styles.scanEntry}>
                   <Text style={styles.scanDate}>{scan.date}</Text>
                   <View style={styles.scanMetrics}>
@@ -181,7 +246,7 @@ export function ProfileScreen() {
           </View>
         )}
 
-        {/* My Cards Archive */}
+        {/* My Cards — placeholder until media endpoints exist */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>MY CARDS</Text>
           <View style={styles.cardsArchive}>
@@ -439,6 +504,23 @@ const styles = StyleSheet.create({
   },
   actions: {
     paddingHorizontal: spacing.lg,
+  },
+  confidenceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  confidenceLabel: {
+    ...typography.caption,
+    color: K.textMuted,
+  },
+  confidenceTier: {
+    ...typography.caption,
+    color: K.ochre,
+    fontWeight: "600",
   },
   blurOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -15,8 +15,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: "com.coledriscoll.reset.dev", // TODO: revert to com.betterwell.reset.dev for production
+    bundleIdentifier: "com.betterwell.reset.dev",
     // usesAppleSignIn: true, // TODO: re-enable once added to paid dev team
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   android: {
     package: "com.betterwell.reset.dev",
@@ -43,5 +46,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   extra: {
     shenAiApiKey: process.env.SHEN_AI_API_KEY ?? "",
+    eas: {
+      projectId: "e1576fd6-3519-4c0f-95e8-abf43df86a02",
+    },
   },
 });

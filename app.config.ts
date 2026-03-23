@@ -46,6 +46,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   extra: {
     shenAiApiKey: process.env.SHEN_AI_API_KEY ?? "",
+    apiBaseUrl: process.env.API_BASE_URL ?? "",
     eas: {
       projectId: "e1576fd6-3519-4c0f-95e8-abf43df86a02",
     },

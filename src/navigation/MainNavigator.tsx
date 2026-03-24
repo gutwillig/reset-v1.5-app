@@ -69,7 +69,7 @@ export function MainNavigator() {
         name="EsterChat"
         component={EsterChatScreen}
         options={{
-          presentation: "modal",
+          presentation: "fullScreenModal",
           animation: "slide_from_bottom",
         }}
       />

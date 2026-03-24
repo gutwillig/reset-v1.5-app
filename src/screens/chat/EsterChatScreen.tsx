@@ -6,12 +6,12 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   Animated,
   ActivityIndicator,
+  Keyboard,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { K } from "../../constants/colors";
 import { typography, spacing, radius } from "../../constants/typography";
@@ -56,6 +56,26 @@ export function EsterChatScreen() {
   const [chatSessionId, setChatSessionId] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const insets = useSafeAreaInsets();
+
+  // Track keyboard height
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const defaultGreeting: Message = {
     id: "initial",
@@ -208,7 +228,8 @@ export function EsterChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+    <View style={styles.outerContainer}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
@@ -235,52 +256,49 @@ export function EsterChatScreen() {
       )}
 
       {/* Messages */}
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
-      >
-        {isLoadingHistory ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={K.textMuted} />
-          </View>
-        ) : (
+      {isLoadingHistory ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={K.textMuted} />
+        </View>
+      ) : (
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
         >
           {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
           {isTyping && <TypingIndicator />}
         </ScrollView>
-        )}
+      )}
 
-        {/* Input */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Ask Ester anything..."
-            placeholderTextColor={K.faded}
-            multiline
-            maxLength={500}
-            onSubmitEditing={handleSend}
-            returnKeyType="send"
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-            onPress={handleSend}
-            disabled={!inputText.trim()}
-          >
-            <Text style={styles.sendIcon}>→</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      {/* Input */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          value={inputText}
+          onChangeText={setInputText}
+          placeholder="Ask Ester anything..."
+          placeholderTextColor={K.faded}
+          multiline
+          maxLength={500}
+          onSubmitEditing={handleSend}
+          returnKeyType="send"
+        />
+        <TouchableOpacity
+          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+          onPress={handleSend}
+          disabled={!inputText.trim()}
+        >
+          <Text style={styles.sendIcon}>→</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+    </View>
   );
 }
 
@@ -341,6 +359,10 @@ function TypingIndicator() {
 }
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: K.bone,
+  },
   container: {
     flex: 1,
     backgroundColor: K.white,
@@ -525,5 +547,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: K.brown,
     fontWeight: "bold",
+  },
+  hiddenInput: {
+    height: 0,
+    opacity: 0,
+    position: "absolute",
   },
 });

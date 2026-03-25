@@ -13,7 +13,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as AppleAuthentication from "expo-apple-authentication";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { K } from "../../constants/colors";
 import { typography } from "../../constants/typography";
 import { EsterBubble, Button } from "../../components";
@@ -24,9 +23,17 @@ import { submitScanResults } from "../../services/profile";
 
 import Constants from "expo-constants";
 
-GoogleSignin.configure({
-  webClientId: Constants.expoConfig?.extra?.googleWebClientId,
-});
+// Google Sign-In is Android-only; importing on iOS crashes in Expo Go
+const GoogleSignin =
+  Platform.OS === "android"
+    ? require("@react-native-google-signin/google-signin").GoogleSignin
+    : null;
+
+if (GoogleSignin) {
+  GoogleSignin.configure({
+    webClientId: Constants.expoConfig?.extra?.googleWebClientId,
+  });
+}
 
 type Props = NativeStackScreenProps<any, "Account">;
 

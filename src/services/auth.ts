@@ -71,6 +71,24 @@ export async function loginWithApple(idToken: string): Promise<AuthUser> {
   };
 }
 
+export async function loginWithGoogle(idToken: string): Promise<AuthUser> {
+  const data = await apiClient("/api/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ idToken, platform: "react-native" }),
+  });
+
+  // Google endpoint returns {user, accessToken, refreshToken, platform}
+  await storeTokens(data.accessToken, data.refreshToken);
+
+  return {
+    id: data.user.id,
+    email: data.user.email ?? null,
+    firstName: data.user.name ?? null,
+    lastName: null,
+    avatarUrl: data.user.avatarUrl ?? null,
+  };
+}
+
 export async function fetchMe(): Promise<AuthUser> {
   const data = await apiClient("/api/auth/me");
 

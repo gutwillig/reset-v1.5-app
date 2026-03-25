@@ -12,11 +12,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { K } from "../../constants/colors";
 import { typography } from "../../constants/typography";
 import { Button } from "../../components";
 import { useApp } from "../../context/AppContext";
-import { loginWithEmail, loginWithApple } from "../../services/auth";
+import { loginWithEmail, loginWithApple, loginWithGoogle } from "../../services/auth";
+
+import Constants from "expo-constants";
+
+GoogleSignin.configure({
+  webClientId: Constants.expoConfig?.extra?.googleWebClientId,
+});
 
 export function LoginScreen() {
   const { setAuth, resetState } = useApp();
@@ -67,6 +74,28 @@ export function LoginScreen() {
     } catch (err: any) {
       if (err.code === "ERR_REQUEST_CANCELED") return;
       setError(err.message || "Apple sign-in failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      const idToken = response.data?.idToken;
+
+      if (!idToken) {
+        throw new Error("No ID token from Google");
+      }
+
+      const user = await loginWithGoogle(idToken);
+      setAuth(user);
+    } catch (err: any) {
+      if (err.code === "SIGN_IN_CANCELLED") return;
+      setError(err.message || "Google sign-in failed");
     } finally {
       setIsLoading(false);
     }
@@ -129,29 +158,44 @@ export function LoginScreen() {
               disabled={!isValid || isLoading}
             />
 
-            {appleAvailable && (
-              <>
-                <View style={styles.dividerContainer}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>or</Text>
-                  <View style={styles.dividerLine} />
-                </View>
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-                <TouchableOpacity
-                  style={[styles.appleButton, isLoading && styles.appleButtonDisabled]}
-                  onPress={handleAppleSignIn}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color={K.white} />
-                  ) : (
-                    <>
-                      <Text style={styles.appleIcon}></Text>
-                      <Text style={styles.appleText}>Sign in with Apple</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </>
+            {appleAvailable && (
+              <TouchableOpacity
+                style={[styles.appleButton, isLoading && styles.appleButtonDisabled]}
+                onPress={handleAppleSignIn}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={K.white} />
+                ) : (
+                  <>
+                    <Text style={styles.appleIcon}></Text>
+                    <Text style={styles.appleText}>Sign in with Apple</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {Platform.OS === "android" && (
+              <TouchableOpacity
+                style={[styles.googleButton, isLoading && styles.googleButtonDisabled]}
+                onPress={handleGoogleSignIn}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={K.text} />
+                ) : (
+                  <>
+                    <Text style={styles.googleIcon}>G</Text>
+                    <Text style={styles.googleText}>Sign in with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             )}
           </View>
         </ScrollView>
@@ -257,6 +301,29 @@ const styles = StyleSheet.create({
   appleText: {
     ...typography.button,
     color: K.white,
+  },
+  googleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: K.white,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: K.border,
+    gap: 8,
+  },
+  googleButtonDisabled: {
+    opacity: 0.6,
+  },
+  googleIcon: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#4285F4",
+  },
+  googleText: {
+    ...typography.button,
+    color: K.text,
   },
   bottom: {
     padding: 24,

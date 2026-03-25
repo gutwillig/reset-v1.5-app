@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppleAuthentication from "expo-apple-authentication";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { K } from "../../constants/colors";
 import { typography } from "../../constants/typography";
 import { Button } from "../../components";
@@ -21,9 +20,17 @@ import { loginWithEmail, loginWithApple, loginWithGoogle } from "../../services/
 
 import Constants from "expo-constants";
 
-GoogleSignin.configure({
-  webClientId: Constants.expoConfig?.extra?.googleWebClientId,
-});
+// Google Sign-In is Android-only; importing on iOS crashes in Expo Go
+const GoogleSignin =
+  Platform.OS === "android"
+    ? require("@react-native-google-signin/google-signin").GoogleSignin
+    : null;
+
+if (GoogleSignin) {
+  GoogleSignin.configure({
+    webClientId: Constants.expoConfig?.extra?.googleWebClientId,
+  });
+}
 
 export function LoginScreen() {
   const { setAuth, resetState } = useApp();

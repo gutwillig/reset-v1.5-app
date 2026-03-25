@@ -44,15 +44,48 @@ const BANNED_PREFIXES = [
   "Let's have a great day",
 ];
 
+/** Banned phrases that must never appear in any greeting (PRD 16.4). */
+const BANNED_GREETING_PHRASES = [
+  "great job",
+  "good work",
+  "good job",
+  "cheat day",
+  "bad food",
+  "get back on track",
+  "we missed you",
+  "you've been away",
+  "you've been gone",
+  "low cal",
+  "low-cal",
+  "clean eating",
+  "guilt-free",
+  "goal weight",
+  "target weight",
+  "before and after",
+  "bmi",
+  "body mass index",
+  "body fat %",
+  "body fat percentage",
+  "body shape index",
+  "body roundness index",
+  "waist-to-height ratio",
+  "conicity index",
+];
+
 function validateNoBannedOpener(text: string): void {
-  if (__DEV__) {
-    const lower = text.toLowerCase();
-    for (const prefix of BANNED_PREFIXES) {
-      if (lower.startsWith(prefix.toLowerCase())) {
-        console.warn(
-          `[Greeting] Banned opener detected: "${text.slice(0, 30)}…"`,
-        );
-      }
+  const lower = text.toLowerCase();
+  for (const prefix of BANNED_PREFIXES) {
+    if (lower.startsWith(prefix.toLowerCase())) {
+      console.warn(
+        `[Greeting] Banned opener detected: "${text.slice(0, 30)}…"`,
+      );
+    }
+  }
+  for (const phrase of BANNED_GREETING_PHRASES) {
+    if (lower.includes(phrase)) {
+      console.warn(
+        `[Greeting] Banned phrase detected: "${phrase}" in "${text.slice(0, 50)}…"`,
+      );
     }
   }
 }

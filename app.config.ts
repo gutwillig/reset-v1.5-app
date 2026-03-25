@@ -22,6 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
   android: {
+    minSdkVersion: 26,
     package: "com.betterwell.reset.dev",
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",

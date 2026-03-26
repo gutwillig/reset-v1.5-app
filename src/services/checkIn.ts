@@ -18,6 +18,7 @@ export interface CheckInResponse {
     sleepQuality: string | null;
   };
   confidenceLayer2: number;
+  esterResponse: string;
 }
 
 export async function submitCheckIn(

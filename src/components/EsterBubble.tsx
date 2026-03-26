@@ -88,7 +88,7 @@ const VARIANT_CONFIG: Record<EsterVariant, {
       fontSize: 14,
       lineHeight: 20,
     },
-    maxLines: 3,
+    maxLines: undefined,
   },
   observation: {
     avatarSize: 36,

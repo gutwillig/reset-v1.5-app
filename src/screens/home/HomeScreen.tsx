@@ -288,16 +288,17 @@ export function HomeScreen() {
     }
   };
 
-  const handleCheckInComplete = async (data: any) => {
+  const handleCheckInComplete = async (data: any): Promise<string | undefined> => {
     try {
-      await submitCheckIn({
+      const result = await submitCheckIn({
         energy: data.energy,
         stressTags: data.stress ? [data.stress] : [],
         sleepHours: data.sleepHours ?? undefined,
         sleepQuality: data.sleepQuality ?? undefined,
       });
+      return result.esterResponse;
     } catch {
-      // Check-in still shows Ester's response locally even if backend fails
+      return undefined;
     }
   };
 

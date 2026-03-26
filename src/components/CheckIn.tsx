@@ -35,7 +35,7 @@ interface CheckInData {
 }
 
 interface CheckInProps {
-  onComplete: (data: CheckInData) => void;
+  onComplete: (data: CheckInData) => Promise<string | undefined>;
   onDismiss?: () => void;
 }
 
@@ -47,7 +47,7 @@ export function CheckIn({ onComplete, onDismiss }: CheckInProps) {
     sleepHours: null,
     sleepQuality: null,
   });
-  const [showEsterResponse, setShowEsterResponse] = useState(false);
+  const [esterResponse, setEsterResponse] = useState<string | null>(null);
 
   const handleEnergySelect = (id: string) => {
     setData((prev) => ({ ...prev, energy: id }));
@@ -59,37 +59,27 @@ export function CheckIn({ onComplete, onDismiss }: CheckInProps) {
     setStep(3);
   };
 
+  const completeCheckIn = async (finalData: CheckInData) => {
+    const fallback = "Got it. I'll use this to tune your meals.";
+    const response = await onComplete(finalData);
+    setEsterResponse(response || fallback);
+  };
+
   const handleSleepSelect = (hours: number, quality: string) => {
     const finalData = { ...data, sleepHours: hours, sleepQuality: quality };
     setData(finalData);
-    setShowEsterResponse(true);
-    onComplete(finalData);
+    completeCheckIn(finalData);
   };
 
   const handleSkipSleep = () => {
-    setShowEsterResponse(true);
-    onComplete(data);
+    completeCheckIn(data);
   };
 
-  // Get Ester's response based on check-in data
-  const getEsterResponse = () => {
-    if (data.energy === "low" && data.stress !== "none") {
-      return "Got it. I'll factor that into today's meals — protein-forward to stabilize your afternoon.";
-    }
-    if (data.energy === "high" && data.stress === "none") {
-      return "Great energy today! I'll keep your meals balanced to maintain it.";
-    }
-    if (data.stress === "work") {
-      return "Work stress is real. I've got some calming foods planned for dinner.";
-    }
-    return "Thanks for checking in. I'll use this to tune your meals today.";
-  };
-
-  if (showEsterResponse) {
+  if (esterResponse) {
     return (
       <View style={styles.container}>
         <EsterBubble
-          message={getEsterResponse()}
+          message={esterResponse}
           variant="inline"
         />
       </View>

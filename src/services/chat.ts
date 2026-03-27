@@ -10,6 +10,7 @@ export interface ChatMessage {
     toolName: string;
     data: unknown;
   }>;
+  crisisType?: "self_harm" | "eating_disorder";
 }
 
 export interface ChatSession {

@@ -10,6 +10,7 @@ import {
   Animated,
   ActivityIndicator,
   Keyboard,
+  Linking,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -39,6 +40,7 @@ interface Message {
   text: string;
   sender: "user" | "ester";
   timestamp: Date;
+  crisisType?: "self_harm" | "eating_disorder";
 }
 
 export function EsterChatScreen() {
@@ -198,6 +200,7 @@ export function EsterChatScreen() {
         text: response.content,
         sender: "ester",
         timestamp: new Date(response.createdAt),
+        crisisType: response.crisisType,
       };
       setMessages((prev) => [...prev, esterMessage]);
     } catch (err: any) {
@@ -269,9 +272,13 @@ export function EsterChatScreen() {
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
         >
-          {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
+          {messages.map((message) =>
+            message.crisisType ? (
+              <CrisisResourceCard key={message.id} message={message} />
+            ) : (
+              <MessageBubble key={message.id} message={message} />
+            )
+          )}
           {isTyping && <TypingIndicator />}
         </ScrollView>
       )}
@@ -312,6 +319,49 @@ function MessageBubble({ message }: { message: Message }) {
       <View style={[styles.messageBubble, isEster ? styles.esterBubble : styles.userBubble]}>
         <Text style={[styles.messageText, isEster ? styles.esterText : styles.userText]}>
           {message.text}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// Crisis resource card — renders tappable phone/text resources
+function CrisisResourceCard({ message }: { message: Message }) {
+  const resources =
+    message.crisisType === "self_harm"
+      ? [
+          { label: "988 Suicide & Crisis Lifeline", action: "tel:988", actionLabel: "Call or text 988" },
+          { label: "Crisis Text Line", action: "sms:741741&body=HOME", actionLabel: "Text HOME to 741741" },
+        ]
+      : [
+          {
+            label: "National Alliance for Eating Disorders",
+            action: "tel:18666621235",
+            actionLabel: "Call 1-866-662-1235",
+          },
+        ];
+
+  return (
+    <View style={styles.messageBubbleContainer}>
+      <Avatar size={32} state="neutral" />
+      <View style={styles.crisisCard}>
+        <Text style={styles.crisisText}>
+          {message.crisisType === "self_harm"
+            ? "I hear you, and what you\u2019re feeling matters. Please reach out to someone who can help right now:"
+            : "I hear you. This is beyond what I can help with, and I want you to get the right support:"}
+        </Text>
+        {resources.map((r) => (
+          <TouchableOpacity
+            key={r.action}
+            style={styles.crisisButton}
+            onPress={() => Linking.openURL(r.action)}
+          >
+            <Text style={styles.crisisButtonLabel}>{r.label}</Text>
+            <Text style={styles.crisisButtonAction}>{r.actionLabel}</Text>
+          </TouchableOpacity>
+        ))}
+        <Text style={styles.crisisFooter}>
+          I'm still here for your meals whenever you're ready.
         </Text>
       </View>
     </View>
@@ -552,5 +602,42 @@ const styles = StyleSheet.create({
     height: 0,
     opacity: 0,
     position: "absolute",
+  },
+  crisisCard: {
+    maxWidth: "80%",
+    backgroundColor: K.white,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: K.err,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  crisisText: {
+    ...typography.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: K.brown,
+  },
+  crisisButton: {
+    backgroundColor: K.bone,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  crisisButtonLabel: {
+    ...typography.bodyMedium,
+    color: K.brown,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  crisisButtonAction: {
+    ...typography.caption,
+    color: K.blue,
+    marginTop: 2,
+  },
+  crisisFooter: {
+    ...typography.caption,
+    color: K.textMuted,
+    marginTop: spacing.sm,
   },
 });

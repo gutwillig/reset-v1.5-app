@@ -7,6 +7,7 @@ export interface Layer1 {
   cravingType: string | null;
   dietaryRestrictions: string[];
   tasteCluster: string | null;
+  tasteExclusions: string[];
 }
 
 export interface Layer2 {
@@ -61,6 +62,7 @@ export interface UpdateProfileData {
   cravingType?: string;
   dietaryRestrictions?: string[];
   tasteCluster?: string;
+  tasteExclusions?: string[];
   quizAnswers?: Record<string, string>;
   onboardingStep?: string;
   onboardingComplete?: boolean;

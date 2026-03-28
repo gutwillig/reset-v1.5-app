@@ -269,11 +269,28 @@ function getScanDay6to7Greeting(ctx: GreetingContext): GreetingResult {
   };
 }
 
-function getDay8PlusFreeGreeting(ctx: GreetingContext): GreetingResult {
-  const type = TYPE_CONFIGS[ctx.metabolicType];
+function getScanDay8to14Greeting(ctx: GreetingContext): GreetingResult {
+  const lines = [
+    "A full week of data in. I'm building a bigger picture — your weekly review will pull it together.",
+    "Your scan data is stacking up. There are patterns I want to walk you through soon.",
+    "I've got enough signal now to go deeper. Stay tuned for your weekly review.",
+  ];
   return {
     nameGreeting: ctx.userName ? `${ctx.userName}.` : "Hey.",
-    message: type.tagline,
+    message: lines[dailyIndex(lines.length)],
+  };
+}
+
+function getScanDay15PlusGreeting(ctx: GreetingContext): GreetingResult {
+  const type = TYPE_CONFIGS[ctx.metabolicType];
+  const lines = [
+    `There are deeper markers in your scan I haven't unpacked yet. Your ${type.name.toLowerCase()} pattern has layers — Pro will open them up.`,
+    "Two weeks of biometric data. The surface-level patterns are clear. The deeper ones are waiting.",
+    `Your body's telling a more detailed story now. I've shared the headlines — the full read goes deeper.`,
+  ];
+  return {
+    nameGreeting: ctx.userName ? `${ctx.userName}.` : "Hey.",
+    message: lines[dailyIndex(lines.length)],
   };
 }
 
@@ -331,11 +348,7 @@ export function generateGreeting(ctx: GreetingContext): GreetingResult {
   if (ctx.lapseTier > 0) {
     result = getLapseGreeting(ctx);
   }
-  // Priority 2: Glance-only
-  else if (ctx.isGlanceOnly) {
-    result = getGlanceOnlyGreeting(ctx);
-  }
-  // Priority 3: Has scan
+  // Priority 2: Has scan — buffer revelations always take priority
   else if (ctx.hasScan) {
     if (ctx.dayNumber <= 1) {
       result = getScanDay1Greeting(ctx);
@@ -347,9 +360,15 @@ export function generateGreeting(ctx: GreetingContext): GreetingResult {
       result = getScanDay4to5Greeting(ctx);
     } else if (ctx.dayNumber <= 7) {
       result = getScanDay6to7Greeting(ctx);
+    } else if (ctx.dayNumber <= 14) {
+      result = getScanDay8to14Greeting(ctx);
     } else {
-      result = getDay8PlusFreeGreeting(ctx);
+      result = getScanDay15PlusGreeting(ctx);
     }
+  }
+  // Priority 3: Glance-only (non-scan users with no engagement)
+  else if (ctx.isGlanceOnly) {
+    result = getGlanceOnlyGreeting(ctx);
   }
   // Priority 4: No scan (skip)
   else {

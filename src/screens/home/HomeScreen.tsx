@@ -41,6 +41,8 @@ import { submitCheckIn, getTodayCheckIn, getCheckInHistory } from "../../service
 import type { CheckInEntry } from "../../services/checkIn";
 import { getProfile } from "../../services/profile";
 import type { UserProfile } from "../../services/profile";
+import { IngredientAversionPrompt } from "../../components/IngredientAversionPrompt";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
@@ -125,6 +127,28 @@ export function HomeScreen() {
   const [mealFeedback, setMealFeedback] = useState<Record<string, { feedback: "up" | "down"; tags: string[] }>>({});
 
   const { showPrompt, promptMeal, promptSlot, dismissPrompt, recordMealTap } = useFeedbackPrompt(dailyPlan, dayNumber);
+
+  // Day 3 ingredient aversion prompt (key is per-user)
+  const userId = state.auth.authUser?.id;
+  const aversionKey = `@reset_aversion_dismissed_${userId}`;
+  const [showAversionPrompt, setShowAversionPrompt] = useState(false);
+  useEffect(() => {
+    if (dayNumber >= 3 && userId) {
+      AsyncStorage.getItem(aversionKey).then((val) => {
+        if (!val) {
+          // Also check if user already has taste exclusions
+          if (!profile?.layer1?.tasteExclusions?.length) {
+            setShowAversionPrompt(true);
+          }
+        }
+      });
+    }
+  }, [dayNumber, profile, userId]);
+
+  const handleAversionComplete = () => {
+    setShowAversionPrompt(false);
+    AsyncStorage.setItem(aversionKey, "true");
+  };
 
   // Load favorites and check today's check-in on mount
   useEffect(() => {
@@ -408,6 +432,16 @@ export function HomeScreen() {
           onReplace={handleReplace}
         />
 
+        {/* SLOT: Day 3 Ingredient Aversion Prompt */}
+        {showAversionPrompt && (
+          <View style={styles.aversionSlot}>
+            <IngredientAversionPrompt
+              onComplete={handleAversionComplete}
+              onDismiss={handleAversionComplete}
+            />
+          </View>
+        )}
+
         {/* SLOT: Check-in prompt */}
         {showCheckIn && (
           <View
@@ -471,6 +505,10 @@ const styles = StyleSheet.create({
   nudgeSlot: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md, // 16px gap to meal cards
+  },
+  aversionSlot: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   checkInSlot: {
     paddingHorizontal: spacing.lg,

@@ -48,7 +48,7 @@ export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const { state } = useApp();
   const metabolicType = state.user.metabolicType || "Explorer";
-  const hasScan = !!state.biometrics;
+  const hasScanLocal = !!state.biometrics;
 
   // Use authenticated user name, fall back to onboarding name
   const userName =
@@ -75,6 +75,7 @@ export function HomeScreen() {
 
   // Build greeting context — full when profile is loaded, simple fallback otherwise
   const greeting: GreetingResult = (() => {
+    const hasScan = hasScanLocal || (profile?.layer3?.scanCount ?? 0) > 0;
     const base = { metabolicType, hasScan, dayNumber, userName };
 
     if (!profile) {

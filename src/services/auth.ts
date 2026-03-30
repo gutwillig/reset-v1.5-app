@@ -45,12 +45,8 @@ export async function loginWithEmail(
 
   await storeTokens(data.token, undefined, data.deviceId);
 
-  return {
-    id: data.id,
-    email: data.email,
-    firstName: data.firstName,
-    lastName: data.lastName,
-  };
+  // Fetch full user data (including createdAt) from /me endpoint
+  return fetchMe();
 }
 
 export async function loginWithApple(idToken: string): Promise<AuthUser> {

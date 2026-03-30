@@ -19,11 +19,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // usesAppleSignIn: true, // TODO: re-enable once added to paid dev team
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
+      NSMicrophoneUsageDescription:
+        "Reset uses your microphone for voice conversations with Ester.",
     },
   },
   android: {
     minSdkVersion: 26,
     package: "com.betterwell.reset.dev",
+    permissions: ["RECORD_AUDIO"],
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",
       foregroundImage: "./assets/android-icon-foreground.png",

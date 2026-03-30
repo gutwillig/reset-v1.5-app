@@ -6,7 +6,7 @@ import { Avatar } from "./Avatar";
 
 export type NudgeType = "yap" | "scan" | "observation" | "milestone" | "generic";
 
-interface NudgeContent {
+export interface NudgeContentData {
   type: NudgeType;
   title: string;
   message: string;
@@ -14,10 +14,11 @@ interface NudgeContent {
     label: string;
     onPress: () => void;
   };
+  _onDismiss?: () => void;
 }
 
 interface NudgeSlotProps {
-  content: NudgeContent | null;
+  content: NudgeContentData | null;
   onDismiss?: () => void;
 }
 
@@ -97,17 +98,17 @@ export function NudgeSlot({ content, onDismiss }: NudgeSlotProps) {
 
 // Pre-built nudge content generators
 export const NudgeContent = {
-  yapSession: (onPress: () => void): NudgeContent => ({
+  yapSession: (onPress: () => void, customMessage?: string): NudgeContentData => ({
     type: "yap",
     title: "Got a minute?",
-    message: "Tell me how today's meals worked for you. Quick chat — 60 seconds max.",
+    message: customMessage || "Tell me how today's meals worked for you. Quick chat — 60 seconds max.",
     action: {
       label: "Start Yap Session",
       onPress,
     },
   }),
 
-  scanPrompt: (onPress: () => void): NudgeContent => ({
+  scanPrompt: (onPress: () => void): NudgeContentData => ({
     type: "scan",
     title: "Time for a scan",
     message: "It's been a week since your last reading. Want to check your signals?",
@@ -117,26 +118,26 @@ export const NudgeContent = {
     },
   }),
 
-  observation: (message: string): NudgeContent => ({
+  observation: (message: string): NudgeContentData => ({
     type: "observation",
     title: "Ester noticed",
     message,
   }),
 
-  milestone: (achievement: string): NudgeContent => ({
+  milestone: (achievement: string): NudgeContentData => ({
     type: "milestone",
     title: "Nice work!",
     message: achievement,
   }),
 
-  generic: (title: string, message: string, action?: { label: string; onPress: () => void }): NudgeContent => ({
+  generic: (title: string, message: string, action?: { label: string; onPress: () => void }): NudgeContentData => ({
     type: "generic",
     title,
     message,
     action,
   }),
 
-  feedbackPrompt: (mealName: string): NudgeContent => ({
+  feedbackPrompt: (mealName: string): NudgeContentData => ({
     type: "observation",
     title: "How was your meal?",
     message: `How did the ${mealName} work for you? Scroll down to rate it.`,

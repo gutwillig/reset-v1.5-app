@@ -6,6 +6,7 @@ import { ProfileScreen } from "../screens/profile";
 import { EsterChatScreen } from "../screens/chat";
 import { RecipeDetailScreen } from "../screens/recipe";
 import { SettingsScreen } from "../screens/settings/SettingsScreen";
+import { YapCallScreen } from "../screens/yap/YapCallScreen";
 import { TabBar } from "../components";
 import type { Meal } from "../components";
 
@@ -26,6 +27,9 @@ export type MainStackParamList = {
     meal: Meal;
   };
   Settings: undefined;
+  YapCall: {
+    yapSessionId: string;
+  };
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -86,6 +90,14 @@ export function MainNavigator() {
         component={SettingsScreen}
         options={{
           presentation: "modal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="YapCall"
+        component={YapCallScreen}
+        options={{
+          presentation: "fullScreenModal",
           animation: "slide_from_bottom",
         }}
       />

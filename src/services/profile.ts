@@ -8,6 +8,10 @@ export interface Layer1 {
   dietaryRestrictions: string[];
   tasteCluster: string | null;
   tasteExclusions: string[];
+  eatingWindowClose: string;
+  currentPhase: "follicular" | "luteal" | null;
+  phaseStartDate: string | null;
+  cycleLengthDays: number | null;
 }
 
 export interface Layer2 {
@@ -63,6 +67,10 @@ export interface UpdateProfileData {
   dietaryRestrictions?: string[];
   tasteCluster?: string;
   tasteExclusions?: string[];
+  eatingWindowClose?: string;
+  currentPhase?: "follicular" | "luteal";
+  phaseStartDate?: string;
+  cycleLengthDays?: number;
   quizAnswers?: Record<string, string>;
   onboardingStep?: string;
   onboardingComplete?: boolean;

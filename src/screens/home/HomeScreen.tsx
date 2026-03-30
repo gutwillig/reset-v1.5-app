@@ -388,6 +388,36 @@ export function HomeScreen() {
           </View>
         )}
 
+        {/* SLOT: Signal adjustment indicator */}
+        {dailyPlan?.signalAdjustments && (dailyPlan.signalAdjustments.stress || dailyPlan.signalAdjustments.sleep || dailyPlan.signalAdjustments.energy) && (
+          <TouchableOpacity
+            style={styles.signalIndicator}
+            onPress={() => navigation.navigate("EsterChat", { context: "general" })}
+          >
+            <Text style={styles.signalIndicatorText}>
+              {dailyPlan.signalAdjustments.stress
+                ? "Stress-adjusted meals today"
+                : dailyPlan.signalAdjustments.sleep
+                ? "Recovery-tuned meals today"
+                : "Energy-focused meals today"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* SLOT: Shifter phase indicator */}
+        {profile?.layer1?.currentPhase && (profile?.layer1?.primaryBucket?.toLowerCase() === "shifter" || metabolicType.toLowerCase() === "shifter") && (
+          <View style={styles.phaseIndicatorSlot}>
+            <Text style={styles.phaseIndicatorTitle}>
+              {profile.layer1.currentPhase === "follicular" ? "Follicular phase meals" : "Luteal phase meals"}
+            </Text>
+            <Text style={styles.phaseIndicatorDesc}>
+              {profile.layer1.currentPhase === "follicular"
+                ? "Today's meals are lighter — wider carb sources and flexible proteins to match this phase."
+                : "Today's meals are higher protein with more iron-rich fuel to match what your body needs right now."}
+            </Text>
+          </View>
+        )}
+
         {/* SLOT: Meal Cards - Breakfast */}
         <MealCardSlot
           label="Breakfast"
@@ -418,20 +448,28 @@ export function HomeScreen() {
           onReplace={handleReplace}
         />
 
-        {/* SLOT: Meal Cards - Dinner */}
-        <MealCardSlot
-          label="Dinner"
-          meals={dinnerMeals}
-          metabolicType={metabolicType}
-          favoritedMealIds={favoritedMeals}
-          mealFeedback={mealFeedback}
-          onMealPress={handleMealPress}
-          onFeedback={handleFeedback}
-          onChatPress={handleMealChatPress}
-          onRecipePress={handleRecipePress}
-          onFavoriteToggle={handleFavoriteToggle}
-          onReplace={handleReplace}
-        />
+        {/* SLOT: Meal Cards - Dinner (hidden after eating window close) */}
+        {dinnerMeals.length > 0 ? (
+          <MealCardSlot
+            label="Dinner"
+            meals={dinnerMeals}
+            metabolicType={metabolicType}
+            favoritedMealIds={favoritedMeals}
+            mealFeedback={mealFeedback}
+            onMealPress={handleMealPress}
+            onFeedback={handleFeedback}
+            onChatPress={handleMealChatPress}
+            onRecipePress={handleRecipePress}
+            onFavoriteToggle={handleFavoriteToggle}
+            onReplace={handleReplace}
+          />
+        ) : dailyPlan && (
+          <View style={styles.windowClosedSlot}>
+            <Text style={styles.windowClosedText}>
+              Your evening window has closed. Your body is in recovery mode.
+            </Text>
+          </View>
+        )}
 
         {/* SLOT: Day 3 Ingredient Aversion Prompt */}
         {showAversionPrompt && (
@@ -506,6 +544,52 @@ const styles = StyleSheet.create({
   nudgeSlot: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md, // 16px gap to meal cards
+  },
+  phaseIndicatorSlot: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: K.bone,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  phaseIndicatorTitle: {
+    ...typography.bodyMedium,
+    color: K.ochre,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  phaseIndicatorDesc: {
+    ...typography.caption,
+    color: K.textMuted,
+    marginTop: 2,
+  },
+  windowClosedSlot: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: K.bone,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  windowClosedText: {
+    ...typography.body,
+    color: K.textMuted,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  signalIndicator: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: K.blue,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  signalIndicatorText: {
+    ...typography.caption,
+    color: K.brown,
+    fontWeight: "500",
+    textAlign: "center",
   },
   aversionSlot: {
     paddingHorizontal: spacing.lg,

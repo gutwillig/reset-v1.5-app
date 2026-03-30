@@ -75,6 +75,12 @@ export interface DailyPlanMeal {
   cuisineCluster?: string;
 }
 
+export interface SignalAdjustments {
+  stress: boolean;
+  sleep: boolean;
+  energy: boolean;
+}
+
 export interface DailyPlan {
   id: string;
   date: string;
@@ -84,6 +90,7 @@ export interface DailyPlan {
   lunch: DailyPlanMeal[];
   dinner: DailyPlanMeal[];
   snack?: DailyPlanMeal;
+  signalAdjustments?: SignalAdjustments;
 }
 
 const DAILY_PLAN_CACHE_KEY = "@reset_daily_plan";

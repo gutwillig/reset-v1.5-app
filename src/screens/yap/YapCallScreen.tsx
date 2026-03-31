@@ -12,6 +12,7 @@ import { K } from "../../constants/colors";
 import { typography, spacing, radius } from "../../constants/typography";
 import { Avatar } from "../../components/Avatar";
 import { startYapSession } from "../../services/yap";
+import * as BrazeService from "../../services/braze";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "../../navigation/MainNavigator";
 
@@ -83,7 +84,10 @@ export function YapCallScreen({ navigation, route }: Props) {
         callRef.current = call;
 
         call.on(Call.Event.Connected, () => {
-          if (mounted) setCallState("active");
+          if (mounted) {
+            setCallState("active");
+            BrazeService.logEvent("yap_session_started");
+          }
         });
 
         call.on(Call.Event.Disconnected, () => {

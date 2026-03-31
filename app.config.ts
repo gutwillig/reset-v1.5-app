@@ -47,6 +47,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           "Reset uses your camera to read biometric signals from your face.",
       },
     ],
+    [
+      "@braze/expo-plugin",
+      {
+        iosApiKey: "c2b31d10-6583-4a51-9a08-6ef896be9e2c",
+        androidApiKey: "b4300a40-f8e5-4eca-baeb-eefacfe15901",
+        baseUrl: "sdk.iad-07.braze.com",
+        enableBrazeIosPush: true,
+        enableFirebaseCloudMessaging: false,
+      },
+    ],
   ],
   extra: {
     shenAiApiKey: process.env.SHEN_AI_API_KEY ?? "",

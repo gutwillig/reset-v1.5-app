@@ -16,6 +16,7 @@ import { DIETARY_RESTRICTIONS, TASTE_CLUSTERS } from "../../constants/types";
 import { Pill } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { logout } from "../../services/auth";
+import * as BrazeService from "../../services/braze";
 
 // Notification categories
 const NOTIFICATION_CATEGORIES = [
@@ -54,7 +55,11 @@ export function SettingsScreen() {
   );
 
   const toggleNotification = (id: string) => {
-    setNotifications((prev) => ({ ...prev, [id]: !prev[id] }));
+    setNotifications((prev) => {
+      const updated = { ...prev, [id]: !prev[id] };
+      BrazeService.setCustomAttribute(`notification_pref_${id}`, updated[id]);
+      return updated;
+    });
   };
 
   const toggleDietOption = (id: string) => {

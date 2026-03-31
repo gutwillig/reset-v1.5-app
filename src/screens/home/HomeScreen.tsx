@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -16,6 +16,7 @@ import {
 import type { Meal } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt";
+import { useYapNudge } from "../../hooks/useYapNudge";
 import {
   generateGreeting,
   generateSimpleGreeting,
@@ -119,9 +120,18 @@ export function HomeScreen() {
   const checkInY = useRef(0);
   const [showCheckIn, setShowCheckIn] = useState(true);
   const [favoritedMeals, setFavoritedMeals] = useState<Set<string>>(new Set());
-  const [nudge, setNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(
+  const [observationNudge, setObservationNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(
     NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.")
   );
+
+  // Yap session nudge (priority over observations)
+  const handleStartYap = useCallback((yapSessionId: string) => {
+    navigation.navigate("YapCall", { yapSessionId });
+  }, [navigation]);
+  const { nudge: yapNudge } = useYapNudge(handleStartYap);
+
+  // Yap takes priority over observation
+  const nudge = yapNudge || observationNudge;
   const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -234,7 +244,12 @@ export function HomeScreen() {
   };
 
   const handleNudgeDismiss = () => {
-    setNudge(null);
+    // If the active nudge is a yap nudge, use its dismiss handler
+    if (yapNudge?._onDismiss) {
+      yapNudge._onDismiss();
+    } else {
+      setObservationNudge(null);
+    }
   };
 
   const handleMealChatPress = (meal: Meal) => {

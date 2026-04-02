@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { MainStackParamList } from "../../navigation/MainNavigator";
 import { K, TC } from "../../constants/colors";
 import { typography, spacing, radius } from "../../constants/typography";
 import { TYPE_CONFIGS } from "../../constants/types";
@@ -48,7 +50,7 @@ function buildLpdEntries(profile: UserProfile): Array<{ date: string; note: stri
 }
 
 export function ProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const { state, resetState } = useApp();
   const metabolicType = state.user.metabolicType || "Explorer";
   const typeConfig = TYPE_CONFIGS[metabolicType];
@@ -225,7 +227,15 @@ export function ProfileScreen() {
         {/* Scan History (only show if user has scanned) */}
         {hasScan && scanEntries.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>SCAN HISTORY</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>SCAN HISTORY</Text>
+              <TouchableOpacity
+                style={styles.newScanButton}
+                onPress={() => navigation.navigate("Scan", { mode: "rescan" })}
+              >
+                <Text style={styles.newScanButtonText}>New Scan</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.scanHistory}>
               {scanEntries.map((scan, i) => (
                 <View key={i} style={styles.scanEntry}>
@@ -350,6 +360,18 @@ const styles = StyleSheet.create({
     color: K.textMuted,
     fontWeight: "600",
     marginBottom: spacing.md,
+  },
+  newScanButton: {
+    backgroundColor: K.ochre,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+  },
+  newScanButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: K.background,
   },
   frozenBadge: {
     backgroundColor: K.border,

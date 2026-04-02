@@ -12,6 +12,7 @@ import { Camera } from "expo-camera";
 import { ShenaiSdkView } from "react-native-shenai-sdk";
 import { K } from "../../constants/colors";
 import { useApp } from "../../context/AppContext";
+import { submitScanResults } from "../../services/profile";
 import Constants from "expo-constants";
 import {
   initShenAI,
@@ -29,7 +30,9 @@ import {
   type FaceState,
 } from "../../services/shenai";
 
-type Props = NativeStackScreenProps<any, "Scan">;
+type Props = NativeStackScreenProps<any, "Scan"> & {
+  route: { params?: { mode?: "onboarding" | "rescan" } };
+};
 
 const SHEN_API_KEY =
   Constants.expoConfig?.extra?.shenAiApiKey ?? "";
@@ -104,7 +107,8 @@ function deriveBiometrics(results: ScanResults) {
   };
 }
 
-export function ScanScreen({ navigation }: Props) {
+export function ScanScreen({ navigation, route }: Props) {
+  const mode = route.params?.mode ?? "onboarding";
   const { setBiometrics } = useApp();
   const [sdkReady, setSdkReady] = useState(false);
   const [screenState, setScreenState] = useState<ScreenState>("initializing");
@@ -378,7 +382,17 @@ export function ScanScreen({ navigation }: Props) {
 
       setTimeout(async () => {
         await shutdownShenAI();
-        navigation.replace("ScanReveal");
+        if (mode === "rescan") {
+          // Post-onboarding: submit to backend and go back
+          try {
+            await submitScanResults(results);
+          } catch {
+            // Non-blocking: scan still saved locally
+          }
+          navigation.replace("ScanResults");
+        } else {
+          navigation.replace("ScanReveal");
+        }
       }, 1500);
     } catch (err) {
       console.error("[ShenAI] finishMeasurement error:", err);
@@ -414,8 +428,12 @@ export function ScanScreen({ navigation }: Props) {
 
   const handleSkip = useCallback(async () => {
     await shutdownShenAI();
-    navigation.replace("TypeReveal");
-  }, [navigation]);
+    if (mode === "rescan") {
+      navigation.goBack();
+    } else {
+      navigation.replace("TypeReveal");
+    }
+  }, [navigation, mode]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],

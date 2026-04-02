@@ -17,6 +17,7 @@ import type { Meal } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt";
 import { useYapNudge } from "../../hooks/useYapNudge";
+import * as BrazeService from "../../services/braze";
 import { useScanNudge } from "../../hooks/useScanNudge";
 import {
   generateGreeting,
@@ -297,6 +298,7 @@ export function HomeScreen() {
         feedback,
         tags,
       });
+      BrazeService.logEvent("meal_feedback_submitted", { slot, feedback });
     } catch {
       // Feedback still recorded locally via optimistic update
     }
@@ -357,6 +359,7 @@ export function HomeScreen() {
         sleepHours: data.sleepHours ?? undefined,
         sleepQuality: data.sleepQuality ?? undefined,
       });
+      BrazeService.logEvent("check_in_completed", { energy: data.energy });
       return result.esterResponse;
     } catch {
       return undefined;

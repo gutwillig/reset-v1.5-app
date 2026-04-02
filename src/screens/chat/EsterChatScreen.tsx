@@ -25,6 +25,7 @@ import {
   getSessionMessages,
 } from "../../services/chat";
 import type { Meal } from "../../components";
+import * as BrazeService from "../../services/braze";
 
 const PENDING_NEW_CHAT_KEY = "@reset_pending_new_chat";
 
@@ -191,6 +192,7 @@ export function EsterChatScreen() {
       // Track the session for follow-up messages
       if (!chatSessionId) {
         setChatSessionId(response.chatSessionId);
+        BrazeService.logEvent("chat_started", { context });
         // Clear pending new chat flag — session is now active
         await AsyncStorage.removeItem(PENDING_NEW_CHAT_KEY);
       }

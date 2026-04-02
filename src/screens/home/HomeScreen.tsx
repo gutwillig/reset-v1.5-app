@@ -18,6 +18,7 @@ import { useApp } from "../../context/AppContext";
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt";
 import { useYapNudge } from "../../hooks/useYapNudge";
 import * as BrazeService from "../../services/braze";
+import { useScanNudge } from "../../hooks/useScanNudge";
 import {
   generateGreeting,
   generateSimpleGreeting,
@@ -65,7 +66,7 @@ export function HomeScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [checkInHistory, setCheckInHistory] = useState<CheckInEntry[]>([]);
 
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
     Promise.all([
       getProfile().catch(() => null),
       getCheckInHistory(30).catch(() => []),
@@ -74,6 +75,16 @@ export function HomeScreen() {
       setCheckInHistory(history);
     });
   }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  // Re-fetch profile when screen regains focus (e.g. after scan)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", loadProfile);
+    return unsubscribe;
+  }, [navigation, loadProfile]);
 
   // Build greeting context — full when profile is loaded, simple fallback otherwise
   const greeting: GreetingResult = (() => {
@@ -131,8 +142,18 @@ export function HomeScreen() {
   }, [navigation]);
   const { nudge: yapNudge } = useYapNudge(handleStartYap);
 
-  // Yap takes priority over observation
-  const nudge = yapNudge || observationNudge;
+  // Scan nudge (between yap and observation)
+  const handleStartScan = useCallback(() => {
+    navigation.navigate("Scan", { mode: "rescan" });
+  }, [navigation]);
+  const { nudge: scanNudge } = useScanNudge(
+    handleStartScan,
+    profile?.layer3?.scanCount ?? 0,
+    profile?.layer3?.latestScan?.scannedAt ?? null,
+  );
+
+  // Priority: yap > scan > observation
+  const nudge = yapNudge || scanNudge || observationNudge;
   const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

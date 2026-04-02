@@ -7,6 +7,8 @@ import { EsterChatScreen } from "../screens/chat";
 import { RecipeDetailScreen } from "../screens/recipe";
 import { SettingsScreen } from "../screens/settings/SettingsScreen";
 import { YapCallScreen } from "../screens/yap/YapCallScreen";
+import { ScanScreen } from "../screens/onboarding/ScanScreen";
+import { ScanResultsScreen } from "../screens/scan/ScanResultsScreen";
 import { TabBar } from "../components";
 import type { Meal } from "../components";
 
@@ -30,6 +32,10 @@ export type MainStackParamList = {
   YapCall: {
     yapSessionId: string;
   };
+  Scan: {
+    mode: "rescan";
+  };
+  ScanResults: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -96,6 +102,23 @@ export function MainNavigator() {
       <Stack.Screen
         name="YapCall"
         component={YapCallScreen}
+        options={{
+          presentation: "fullScreenModal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="Scan"
+        component={ScanScreen}
+        options={{
+          presentation: "fullScreenModal",
+          animation: "slide_from_bottom",
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="ScanResults"
+        component={ScanResultsScreen}
         options={{
           presentation: "fullScreenModal",
           animation: "slide_from_bottom",

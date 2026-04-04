@@ -8,6 +8,7 @@ import {
   Animated,
 } from "react-native";
 import { Voice, Call } from "@twilio/voice-react-native-sdk";
+import { Camera } from "expo-camera";
 import { K } from "../../constants/colors";
 import { typography, spacing, radius } from "../../constants/typography";
 import { Avatar } from "../../components/Avatar";
@@ -71,6 +72,16 @@ export function YapCallScreen({ navigation, route }: Props) {
 
     async function connect() {
       try {
+        // Request microphone permission before connecting
+        const { granted } = await Camera.requestMicrophonePermissionsAsync();
+        if (!granted) {
+          if (mounted) {
+            setCallState("error");
+            setErrorMessage("Microphone permission is required for Yap sessions.");
+          }
+          return;
+        }
+
         const result = await startYapSession(yapSessionId);
         if (!mounted) return;
 

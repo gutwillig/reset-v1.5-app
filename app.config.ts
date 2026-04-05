@@ -21,6 +21,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       ITSAppUsesNonExemptEncryption: false,
       NSMicrophoneUsageDescription:
         "Reset uses your microphone for voice conversations with Ester.",
+      UIBackgroundModes: ["voip", "audio"],
     },
   },
   android: {

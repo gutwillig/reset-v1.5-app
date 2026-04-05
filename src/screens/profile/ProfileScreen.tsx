@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -58,9 +58,19 @@ export function ProfileScreen() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
     getProfile().then(setProfile).catch(() => null);
   }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  // Re-fetch profile when screen regains focus (e.g. after scan)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", loadProfile);
+    return unsubscribe;
+  }, [navigation, loadProfile]);
 
   // Determine subscription tier
   const tier: SubscriptionTier = (state.biometrics || (profile?.layer3.scanCount ?? 0) > 0) ? "pro" : "free";

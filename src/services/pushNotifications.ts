@@ -1,5 +1,4 @@
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
 import Braze from "@braze/react-native-sdk";
 import * as BrazeService from "./braze";
 
@@ -17,60 +16,15 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * Request push notification permission and register token with Braze.
- * Returns true if permission was granted.
+ * Request push notification permission via Braze SDK.
+ * This ensures Braze handles both the iOS permission prompt and token registration.
  */
-export async function requestPushPermission(): Promise<boolean> {
-  const { status: existingStatus } =
-    await Notifications.getPermissionsAsync();
-
-  if (existingStatus === "granted") {
-    await registerPushToken();
-    BrazeService.logEvent("push_permission_granted");
-    return true;
-  }
-
-  const { status } = await Notifications.requestPermissionsAsync();
-  const granted = status === "granted";
-
-  if (granted) {
-    await registerPushToken();
-    BrazeService.logEvent("push_permission_granted");
-  } else {
-    BrazeService.logEvent("push_permission_denied");
-  }
-
-  BrazeService.setCustomAttribute("push_permission_status", granted ? "granted" : "denied");
-
-  return granted;
-}
-
-/**
- * Register the device push token with Braze.
- */
-async function registerPushToken(): Promise<void> {
-  try {
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", {
-        name: "Default",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-      });
-    }
-
-    const deviceToken = await Notifications.getDevicePushTokenAsync();
-    Braze.registerPushToken(deviceToken.data as string);
-  } catch (error) {
-    console.warn("Failed to register push token:", error);
-  }
-}
-
-/**
- * Check current push permission status without prompting.
- */
-export async function getPushPermissionStatus(): Promise<"granted" | "denied" | "undetermined"> {
-  const { status } = await Notifications.getPermissionsAsync();
-  return status;
+export function requestPushPermission(): void {
+  Braze.requestPushPermission({
+    alert: true,
+    badge: true,
+    sound: true,
+  });
 }
 
 /**

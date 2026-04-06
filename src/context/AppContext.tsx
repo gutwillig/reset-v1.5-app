@@ -235,7 +235,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
           // Re-identify with Braze on session restore + register push token
           BrazeService.changeUser(authUser.id);
-          requestPushPermission().catch(() => {});
+          requestPushPermission();
           setupNotificationListeners();
 
           // If local state is missing onboarding data but backend has it (e.g. reinstall),
@@ -323,7 +323,7 @@ export function AppProvider({ children }: AppProviderProps) {
       payload: { isAuthenticated: true, authUser: user },
     });
     // Request push permission on login/register so new users get prompted
-    requestPushPermission().catch(() => {});
+    requestPushPermission();
   };
 
   const clearAuth = () => {

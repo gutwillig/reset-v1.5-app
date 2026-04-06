@@ -43,6 +43,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-font",
     // "expo-apple-authentication", // TODO: re-enable once added to paid dev team
     [
+      "expo-notifications",
+      {
+        icon: "./assets/icon.png",
+        color: "#ffffff",
+      },
+    ],
+    [
       "expo-camera",
       {
         cameraPermission:

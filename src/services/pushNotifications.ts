@@ -25,7 +25,7 @@ export async function requestPushPermission(): Promise<boolean> {
     await Notifications.getPermissionsAsync();
 
   if (existingStatus === "granted") {
-    // Token registration handled natively by @braze/expo-plugin (enableBrazeIosPush)
+    await registerPushToken();
     BrazeService.logEvent("push_permission_granted");
     return true;
   }
@@ -34,7 +34,7 @@ export async function requestPushPermission(): Promise<boolean> {
   const granted = status === "granted";
 
   if (granted) {
-    // Token registration handled natively by @braze/expo-plugin (enableBrazeIosPush)
+    await registerPushToken();
     BrazeService.logEvent("push_permission_granted");
   } else {
     BrazeService.logEvent("push_permission_denied");

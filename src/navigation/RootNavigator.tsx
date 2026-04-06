@@ -1,6 +1,7 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, LinkingOptions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import * as Linking from "expo-linking";
 import { OnboardingNavigator } from "./OnboardingNavigator";
 import { MainNavigator } from "./MainNavigator";
 import { LoginScreen } from "../screens/auth/LoginScreen";
@@ -16,6 +17,23 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: [Linking.createURL("/"), "resetapp://"],
+  config: {
+    screens: {
+      Main: {
+        screens: {
+          Tabs: {
+            screens: {
+              Home: "home",
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 export function RootNavigator() {
   const { state } = useApp();
 
@@ -29,7 +47,7 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!state.user.hasCompletedOnboarding ? (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />

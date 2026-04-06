@@ -51,7 +51,6 @@ export async function requestPushPermission(): Promise<boolean> {
 async function registerPushToken(): Promise<void> {
   try {
     if (Platform.OS === "android") {
-      // Android needs a notification channel
       await Notifications.setNotificationChannelAsync("default", {
         name: "Default",
         importance: Notifications.AndroidImportance.MAX,
@@ -59,15 +58,8 @@ async function registerPushToken(): Promise<void> {
       });
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync();
-    // For Braze, we need the device push token, not the Expo token
     const deviceToken = await Notifications.getDevicePushTokenAsync();
-
-    if (Platform.OS === "ios") {
-      Braze.registerPushToken(deviceToken.data as string);
-    } else {
-      Braze.registerPushToken(deviceToken.data as string);
-    }
+    Braze.registerPushToken(deviceToken.data as string);
   } catch (error) {
     console.warn("Failed to register push token:", error);
   }

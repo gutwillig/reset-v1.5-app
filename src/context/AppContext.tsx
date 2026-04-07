@@ -5,7 +5,7 @@ import { getTokens, clearTokens } from "../services/apiClient";
 import { fetchMe, AuthUser } from "../services/auth";
 import { getProfile } from "../services/profile";
 import * as BrazeService from "../services/braze";
-import { requestPushPermission, setupNotificationListeners } from "../services/pushNotifications";
+import { requestPushPermission } from "../services/pushNotifications";
 
 // State types
 interface UserProfile {
@@ -236,7 +236,6 @@ export function AppProvider({ children }: AppProviderProps) {
           // Re-identify with Braze on session restore + register push token
           BrazeService.changeUser(authUser.id);
           requestPushPermission();
-          setupNotificationListeners();
 
           // If local state is missing onboarding data but backend has it (e.g. reinstall),
           // restore from backend profile

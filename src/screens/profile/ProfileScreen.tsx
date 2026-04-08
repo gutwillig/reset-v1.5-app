@@ -266,25 +266,6 @@ export function ProfileScreen() {
           </View>
         )}
 
-        {/* My Cards — placeholder until media endpoints exist */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>MY CARDS</Text>
-          <View style={styles.cardsArchive}>
-            <TouchableOpacity style={styles.archiveCard}>
-              <Text style={styles.archiveCardIcon}>🎯</Text>
-              <Text style={styles.archiveCardLabel}>Type Card</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.archiveCard}>
-              <Text style={styles.archiveCardIcon}>📊</Text>
-              <Text style={styles.archiveCardLabel}>Scan Results</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.archiveCard}>
-              <Text style={styles.archiveCardIcon}>🍽️</Text>
-              <Text style={styles.archiveCardLabel}>Meal Stats</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* Settings Link */}
         <TouchableOpacity style={styles.settingsLink} onPress={handleSettingsPress}>
           <Text style={styles.settingsIcon}>⚙️</Text>
@@ -492,25 +473,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: K.textMuted,
     fontSize: 10,
-  },
-  cardsArchive: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  archiveCard: {
-    flex: 1,
-    backgroundColor: K.bone,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    alignItems: "center",
-  },
-  archiveCardIcon: {
-    fontSize: 24,
-    marginBottom: spacing.sm,
-  },
-  archiveCardLabel: {
-    ...typography.caption,
-    color: K.brown,
   },
   settingsLink: {
     flexDirection: "row",

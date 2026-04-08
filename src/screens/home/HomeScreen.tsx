@@ -27,7 +27,6 @@ import {
   computeDaysSinceLastCheckIn,
 } from "../../services/greetings";
 import type { GreetingContext, GreetingResult } from "../../services/greetings";
-import { getMealsForSlot } from "../../data/meals";
 import {
   getFavorites,
   addFavorite,
@@ -132,9 +131,7 @@ export function HomeScreen() {
   const checkInY = useRef(0);
   const [showCheckIn, setShowCheckIn] = useState(true);
   const [favoritedMeals, setFavoritedMeals] = useState<Set<string>>(new Set());
-  const [observationNudge, setObservationNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(
-    NudgeContent.observation("You've been consistent with breakfast this week. Your morning energy should be improving.")
-  );
+  const [observationNudge, setObservationNudge] = useState<ReturnType<typeof NudgeContent.observation> | null>(null);
 
   // Yap session nudge (priority over observations)
   const handleStartYap = useCallback((yapSessionId: string) => {
@@ -251,10 +248,10 @@ export function HomeScreen() {
     }
   };
 
-  // Use API plan if available, fallback to static data
-  const breakfastMeals = dailyPlan?.breakfast ?? getMealsForSlot(metabolicType, "breakfast");
-  const lunchMeals = dailyPlan?.lunch ?? getMealsForSlot(metabolicType, "lunch");
-  const dinnerMeals = dailyPlan?.dinner ?? getMealsForSlot(metabolicType, "dinner");
+  // Use API plan only — no static fallback
+  const breakfastMeals = dailyPlan?.breakfast ?? [];
+  const lunchMeals = dailyPlan?.lunch ?? [];
+  const dinnerMeals = dailyPlan?.dinner ?? [];
 
   const handleMealPress = (meal: Meal) => {
     recordMealTap();
@@ -420,10 +417,17 @@ export function HomeScreen() {
         )}
 
         {/* Loading state for meal plan */}
-        {planLoading && !dailyPlan && breakfastMeals.length === 0 && (
+        {planLoading && !dailyPlan && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={K.ochre} />
             <Text style={styles.loadingText}>Loading your personalized meals...</Text>
+          </View>
+        )}
+
+        {/* Empty state when no meal plan available */}
+        {!planLoading && !dailyPlan && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.emptyStateText}>Complete onboarding to get your personalized meal plan.</Text>
           </View>
         )}
 
@@ -502,7 +506,7 @@ export function HomeScreen() {
             onFavoriteToggle={handleFavoriteToggle}
             onReplace={handleReplace}
           />
-        ) : dailyPlan && (
+        ) : dailyPlan && new Date().getHours() >= parseInt(profile?.layer1?.eatingWindowClose?.split(":")[0] ?? "18", 10) && (
           <View style={styles.windowClosedSlot}>
             <Text style={styles.windowClosedText}>
               Your evening window has closed. Your body is in recovery mode.
@@ -695,5 +699,11 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: K.textMuted,
     marginTop: spacing.md,
+  },
+  emptyStateText: {
+    ...typography.body,
+    color: K.textMuted,
+    textAlign: "center",
+    paddingHorizontal: spacing.xl,
   },
 });

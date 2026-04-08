@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Switch,
   Alert,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { K } from "../../constants/colors";
@@ -17,6 +18,8 @@ import { Pill } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { logout } from "../../services/auth";
 import * as BrazeService from "../../services/braze";
+
+const NOTIFICATION_PREFS_KEY = "notification_preferences";
 
 // Notification categories
 const NOTIFICATION_CATEGORIES = [
@@ -37,10 +40,16 @@ export function SettingsScreen() {
     resetState,
   } = useApp();
 
-  // Local state for notification toggles
+  // Notification toggles — persisted via AsyncStorage
   const [notifications, setNotifications] = useState<Record<string, boolean>>(
     Object.fromEntries(NOTIFICATION_CATEGORIES.map((c) => [c.id, true]))
   );
+
+  useEffect(() => {
+    AsyncStorage.getItem(NOTIFICATION_PREFS_KEY).then((stored) => {
+      if (stored) setNotifications(JSON.parse(stored));
+    });
+  }, []);
 
   // Local state for dietary restrictions editing
   const [editingDiet, setEditingDiet] = useState(false);
@@ -57,6 +66,7 @@ export function SettingsScreen() {
   const toggleNotification = (id: string) => {
     setNotifications((prev) => {
       const updated = { ...prev, [id]: !prev[id] };
+      AsyncStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(updated));
       BrazeService.setCustomAttribute(`notification_pref_${id}`, updated[id]);
       return updated;
     });

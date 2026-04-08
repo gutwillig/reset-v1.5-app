@@ -506,7 +506,7 @@ export function HomeScreen() {
             onFavoriteToggle={handleFavoriteToggle}
             onReplace={handleReplace}
           />
-        ) : dailyPlan && (
+        ) : dailyPlan && new Date().getHours() >= parseInt(profile?.layer1?.eatingWindowClose?.split(":")[0] ?? "18", 10) && (
           <View style={styles.windowClosedSlot}>
             <Text style={styles.windowClosedText}>
               Your evening window has closed. Your body is in recovery mode.

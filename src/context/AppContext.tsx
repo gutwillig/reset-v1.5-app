@@ -321,7 +321,8 @@ export function AppProvider({ children }: AppProviderProps) {
       type: "SET_AUTH",
       payload: { isAuthenticated: true, authUser: user },
     });
-    // Request push permission on login/register so new users get prompted
+    // Identify user with Braze and request push permission
+    BrazeService.changeUser(user.id);
     requestPushPermission();
   };
 

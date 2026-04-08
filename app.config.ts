@@ -18,11 +18,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: true,
     bundleIdentifier: "com.betterwell.reset.dev",
     // usesAppleSignIn: true, // TODO: re-enable once added to paid dev team
+    entitlements: {
+      "aps-environment": "production",
+    },
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSMicrophoneUsageDescription:
         "Reset uses your microphone for voice conversations with Ester.",
-      UIBackgroundModes: ["voip", "audio"],
+      UIBackgroundModes: ["voip", "audio", "remote-notification"],
     },
   },
   android: {

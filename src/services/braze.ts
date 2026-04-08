@@ -11,6 +11,7 @@ import Braze from "@braze/react-native-sdk";
  */
 export function changeUser(userId: string): void {
   Braze.changeUser(userId);
+  Braze.requestImmediateDataFlush();
 }
 
 /**

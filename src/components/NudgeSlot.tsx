@@ -142,6 +142,18 @@ export const NudgeContent = {
     title: "How was your meal?",
     message: `How did the ${mealName} work for you? Scroll down to rate it.`,
   }),
+
+  staleData: (onScan: () => void, ageLabel?: string | null): NudgeContentData => ({
+    type: "scan",
+    title: "Signals are stale",
+    message: ageLabel
+      ? `Your last reading was ${ageLabel}. I need a fresh scan to keep your meals dialed in.`
+      : "I don't have a recent reading. A quick scan keeps your meals accurate.",
+    action: {
+      label: "Quick Scan",
+      onPress: onScan,
+    },
+  }),
 };
 
 const styles = StyleSheet.create({

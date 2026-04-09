@@ -19,6 +19,7 @@ import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt";
 import { useYapNudge } from "../../hooks/useYapNudge";
 import * as BrazeService from "../../services/braze";
 import { useScanNudge } from "../../hooks/useScanNudge";
+import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import {
   generateGreeting,
   generateSimpleGreeting,
@@ -148,6 +149,11 @@ export function HomeScreen() {
     profile?.layer3?.scanCount ?? 0,
     profile?.layer3?.latestScan?.scannedAt ?? null,
   );
+
+  // Biometric freshness gate (24-hour window)
+  const lastScanAt = profile?.layer3?.latestScan?.scannedAt ?? null;
+  const { isFresh: biometricsFresh, ageLabel } = useBiometricFreshness(lastScanAt);
+  const showStaleBanner = !biometricsFresh && (profile?.layer3?.scanCount ?? 0) > 0;
 
   // Priority: yap > scan > observation
   const nudge = yapNudge || scanNudge || observationNudge;
@@ -431,8 +437,22 @@ export function HomeScreen() {
           </View>
         )}
 
-        {/* SLOT: Signal adjustment indicator */}
-        {dailyPlan?.signalAdjustments && (dailyPlan.signalAdjustments.stress || dailyPlan.signalAdjustments.sleep || dailyPlan.signalAdjustments.energy) && (
+        {/* SLOT: Stale biometric data banner */}
+        {showStaleBanner && (
+          <TouchableOpacity
+            style={styles.staleBanner}
+            onPress={handleStartScan}
+          >
+            <Text style={styles.staleBannerText}>
+              {ageLabel
+                ? `Signals stale (${ageLabel}). Tap to scan.`
+                : "Signals need a fresh reading. Tap to scan."}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* SLOT: Signal adjustment indicator — suppressed when biometric data is stale */}
+        {biometricsFresh && dailyPlan?.signalAdjustments && (dailyPlan.signalAdjustments.stress || dailyPlan.signalAdjustments.sleep || dailyPlan.signalAdjustments.energy) && (
           <TouchableOpacity
             style={styles.signalIndicator}
             onPress={() => navigation.navigate("EsterChat", { context: "general" })}
@@ -631,6 +651,20 @@ const styles = StyleSheet.create({
   signalIndicatorText: {
     ...typography.caption,
     color: K.brown,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  staleBanner: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: K.bone,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  staleBannerText: {
+    ...typography.caption,
+    color: K.ochre,
     fontWeight: "500",
     textAlign: "center",
   },

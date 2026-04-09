@@ -17,6 +17,7 @@ import { TYPE_CONFIGS } from "../../constants/types";
 import { Avatar, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { getProfile, UserProfile } from "../../services/profile";
+import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 
 type SubscriptionTier = "pro" | "free" | "none";
 
@@ -100,8 +101,12 @@ export function ProfileScreen() {
       };
     });
 
-  // Signal card values — overlay real scan data when available
-  const latestScan = profile?.layer3.latestScan;
+  // Biometric freshness gate (24-hour window)
+  const lastScanAt = profile?.layer3?.latestScan?.scannedAt ?? null;
+  const { isFresh: biometricsFresh, ageLabel } = useBiometricFreshness(lastScanAt);
+
+  // Signal card values — overlay real scan data only when fresh
+  const latestScan = biometricsFresh ? profile?.layer3.latestScan : null;
   const stressValue = latestScan ? `${latestScan.stressIndex ?? latestScan.stress_index}` : typeConfig.signals.stress;
   const recoveryValue = latestScan
     ? `${latestScan.parasympatheticActivity ?? latestScan.parasympathetic_activity ?? "—"}`
@@ -181,6 +186,18 @@ export function ProfileScreen() {
         {/* Signal Cards Grid */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>YOUR SIGNALS</Text>
+          {!biometricsFresh && hasScan && (
+            <TouchableOpacity
+              style={styles.staleBanner}
+              onPress={() => navigation.navigate("Scan", { mode: "rescan" })}
+            >
+              <Text style={styles.staleBannerText}>
+                {ageLabel
+                  ? `Last reading: ${ageLabel}. Tap to refresh your signals.`
+                  : "Your signals need a fresh reading. Tap to scan."}
+              </Text>
+            </TouchableOpacity>
+          )}
           <View style={styles.signalGrid}>
             {/* Stress Card */}
             <View style={styles.signalCard}>
@@ -351,6 +368,19 @@ const styles = StyleSheet.create({
     color: K.textMuted,
     fontWeight: "600",
     marginBottom: spacing.md,
+  },
+  staleBanner: {
+    backgroundColor: K.bone,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  staleBannerText: {
+    ...typography.caption,
+    color: K.ochre,
+    fontWeight: "500",
+    textAlign: "center",
   },
   newScanButton: {
     backgroundColor: K.ochre,

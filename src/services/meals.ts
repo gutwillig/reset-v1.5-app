@@ -35,6 +35,11 @@ export interface MealFavorite {
   isBreakfast: boolean;
   isLunch: boolean;
   isDinner: boolean;
+  calories: number | null;
+  protein: number | null;
+  primaryProtein: string | null;
+  cuisineCluster: string | null;
+  inflammatoryIndex: string | null;
 }
 
 export async function addFavorite(mealId: string): Promise<void> {

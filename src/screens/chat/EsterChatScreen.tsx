@@ -36,12 +36,18 @@ type ChatRouteParams = {
   };
 };
 
+interface ToolCall {
+  toolName: string;
+  data: Record<string, unknown>;
+}
+
 interface Message {
   id: string;
   text: string;
   sender: "user" | "ester";
   timestamp: Date;
   crisisType?: "self_harm" | "eating_disorder";
+  toolCalls?: ToolCall[];
 }
 
 export function EsterChatScreen() {
@@ -118,6 +124,7 @@ export function EsterChatScreen() {
                   text: msg.content,
                   sender: msg.role === "user" ? "user" as const : "ester" as const,
                   timestamp: new Date(msg.createdAt),
+                  toolCalls: msg.toolCalls as ToolCall[] | undefined,
                 })),
               ];
               // If entering from a meal card, append the meal greeting
@@ -203,6 +210,7 @@ export function EsterChatScreen() {
         sender: "ester",
         timestamp: new Date(response.createdAt),
         crisisType: response.crisisType,
+        toolCalls: response.toolCalls as ToolCall[] | undefined,
       };
       setMessages((prev) => [...prev, esterMessage]);
     } catch (err: any) {
@@ -278,7 +286,14 @@ export function EsterChatScreen() {
             message.crisisType ? (
               <CrisisResourceCard key={message.id} message={message} />
             ) : (
-              <MessageBubble key={message.id} message={message} />
+              <React.Fragment key={message.id}>
+                <MessageBubble message={message} />
+                {message.toolCalls?.map((tc, i) =>
+                  tc.toolName === "recommend_meal" && tc.data?.success ? (
+                    <InlineMealCard key={`${message.id}-tool-${i}`} data={tc.data} />
+                  ) : null
+                )}
+              </React.Fragment>
             )
           )}
           {isTyping && <TypingIndicator />}
@@ -406,6 +421,36 @@ function TypingIndicator() {
           />
         ))}
       </View>
+    </View>
+  );
+}
+
+// Inline meal card rendered inside chat when recommend_meal tool fires
+function InlineMealCard({ data }: { data: Record<string, unknown> }) {
+  const navigation = useNavigation();
+  const meal = data.meal as Meal | undefined;
+  if (!meal) return null;
+
+  const handlePress = () => {
+    (navigation as any).navigate("RecipeDetail", { meal });
+  };
+
+  return (
+    <View style={styles.messageBubbleContainer}>
+      <Avatar size={32} state="neutral" />
+      <TouchableOpacity style={styles.inlineMealCard} onPress={handlePress} activeOpacity={0.8}>
+        <Text style={styles.inlineMealSlot}>{(data.slot as string || "").toUpperCase()} ALTERNATIVE</Text>
+        <Text style={styles.inlineMealName}>{meal.name}</Text>
+        {meal.whyLine ? <Text style={styles.inlineMealWhy}>{meal.whyLine}</Text> : null}
+        <View style={styles.inlineMealMeta}>
+          <Text style={styles.inlineMealMetaText}>{meal.calories} cal</Text>
+          <Text style={styles.inlineMealMetaDot}>&middot;</Text>
+          <Text style={styles.inlineMealMetaText}>{meal.protein}g protein</Text>
+          <Text style={styles.inlineMealMetaDot}>&middot;</Text>
+          <Text style={styles.inlineMealMetaText}>{meal.prepTime} min</Text>
+        </View>
+        <Text style={styles.inlineMealTap}>Tap for full recipe</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -641,5 +686,53 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: K.textMuted,
     marginTop: spacing.sm,
+  },
+  inlineMealCard: {
+    maxWidth: "80%",
+    backgroundColor: K.bone,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: K.ochre + "40",
+  },
+  inlineMealSlot: {
+    fontSize: 9,
+    letterSpacing: 1.5,
+    color: K.ochre,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  inlineMealName: {
+    ...typography.bodyMedium,
+    color: K.brown,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  inlineMealWhy: {
+    ...typography.caption,
+    color: K.textMuted,
+    marginBottom: spacing.sm,
+    lineHeight: 18,
+  },
+  inlineMealMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
+  inlineMealMetaText: {
+    ...typography.caption,
+    color: K.brown,
+    fontWeight: "500",
+  },
+  inlineMealMetaDot: {
+    color: K.textMuted,
+    fontSize: 10,
+  },
+  inlineMealTap: {
+    ...typography.caption,
+    color: K.ochre,
+    fontWeight: "500",
+    fontSize: 11,
   },
 });

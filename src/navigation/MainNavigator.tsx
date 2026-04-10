@@ -9,6 +9,7 @@ import { SettingsScreen } from "../screens/settings/SettingsScreen";
 import { YapCallScreen } from "../screens/yap/YapCallScreen";
 import { ScanScreen } from "../screens/onboarding/ScanScreen";
 import { ScanResultsScreen } from "../screens/scan/ScanResultsScreen";
+import { SavedMealsScreen } from "../screens/favorites/SavedMealsScreen";
 import { TabBar } from "../components";
 import type { Meal } from "../components";
 
@@ -28,6 +29,7 @@ export type MainStackParamList = {
   RecipeDetail: {
     meal: Meal;
   };
+  SavedMeals: undefined;
   Settings: undefined;
   YapCall: {
     yapSessionId: string;
@@ -86,6 +88,14 @@ export function MainNavigator() {
       <Stack.Screen
         name="RecipeDetail"
         component={RecipeDetailScreen}
+        options={{
+          presentation: "modal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="SavedMeals"
+        component={SavedMealsScreen}
         options={{
           presentation: "modal",
           animation: "slide_from_bottom",

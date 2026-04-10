@@ -283,6 +283,16 @@ export function ProfileScreen() {
           </View>
         )}
 
+        {/* Saved Meals Link */}
+        <TouchableOpacity
+          style={styles.settingsLink}
+          onPress={() => (navigation as any).navigate("SavedMeals")}
+        >
+          <Text style={styles.settingsIcon}>♥</Text>
+          <Text style={styles.settingsText}>Saved Meals</Text>
+          <Text style={styles.settingsArrow}>→</Text>
+        </TouchableOpacity>
+
         {/* Settings Link */}
         <TouchableOpacity style={styles.settingsLink} onPress={handleSettingsPress}>
           <Text style={styles.settingsIcon}>⚙️</Text>

@@ -105,20 +105,27 @@ export function HomeScreen() {
     const lastStress = profile.layer2.stressTags.length > 0
       ? profile.layer2.stressTags[profile.layer2.stressTags.length - 1].tags
       : [];
+    const lastSleepEntry = profile.layer2.sleepLog.length > 0
+      ? profile.layer2.sleepLog[profile.layer2.sleepLog.length - 1]
+      : null;
+
+    // Recency timestamps for dynamic greetings
+    const lastCheckInAt = checkInHistory.length > 0 ? checkInHistory[0].date : null;
+    const lastScanAt = profile.layer3.latestScan?.scannedAt ?? null;
 
     const ctx: GreetingContext = {
       ...base,
       checkInCount,
       latestEnergy: lastEnergy,
       latestStressTags: lastStress,
-      latestSleepQuality:
-        profile.layer2.sleepLog.length > 0
-          ? profile.layer2.sleepLog[profile.layer2.sleepLog.length - 1].quality
-          : null,
+      latestSleepQuality: lastSleepEntry?.quality ?? null,
+      latestSleepHours: lastSleepEntry?.hours ?? null,
       scanCount: profile.layer3.scanCount,
       latestScan: profile.layer3.latestScan,
       esterTier: profile.confidence.esterTier ?? "Pattern Acknowledgment",
       compositeConfidence: profile.confidence.composite,
+      lastCheckInAt,
+      lastScanAt,
       daysSinceLastCheckIn,
       isGlanceOnly: dayNumber >= 5 && checkInCount === 0 && mealFeedbackCount === 0,
       lapseTier: detectLapseTier(daysSinceLastCheckIn),

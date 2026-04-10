@@ -15,10 +15,15 @@ export interface GreetingContext {
   latestEnergy: string | null;
   latestStressTags: string[];
   latestSleepQuality: string | null;
+  latestSleepHours: number | null;
   scanCount: number;
   latestScan: Record<string, any> | null;
   esterTier: string;
   compositeConfidence: number;
+
+  // Recency timestamps (ISO strings)
+  lastCheckInAt: string | null;
+  lastScanAt: string | null;
 
   // Derived
   daysSinceLastCheckIn: number | null;
@@ -372,16 +377,168 @@ function getSkipDay5PlusGreeting(ctx: GreetingContext): GreetingResult {
   };
 }
 
+// ---------- Recency helpers ----------
+
+function isWithin24Hours(dateStr: string | null): boolean {
+  if (!dateStr) return false;
+  const then = new Date(dateStr).getTime();
+  const now = Date.now();
+  return now - then < 24 * 60 * 60 * 1000;
+}
+
+/** True when the latest check-in contains something worth calling out. */
+function hasNotableSignal(ctx: GreetingContext): boolean {
+  if (ctx.latestSleepHours !== null && ctx.latestSleepHours < 6) return true;
+  if (ctx.latestSleepQuality === "poor" || ctx.latestSleepQuality === "bad") return true;
+  if (ctx.latestStressTags.length > 0) return true;
+  if (ctx.latestEnergy === "low" || ctx.latestEnergy === "very_low") return true;
+  if (ctx.latestEnergy === "high" || ctx.latestEnergy === "very_high") return true;
+  return false;
+}
+
+// ---------- Recent-signal greetings (< 24 h) ----------
+
+function getRecentCheckInGreeting(ctx: GreetingContext): GreetingResult {
+  const type = TYPE_CONFIGS[ctx.metabolicType];
+  const nameGreeting = ctx.userName ? `${ctx.userName}.` : "Hey.";
+
+  // Sleep-based greetings
+  if (ctx.latestSleepHours !== null && ctx.latestSleepHours < 6) {
+    return {
+      nameGreeting,
+      message: `${ctx.latestSleepHours} hours of sleep. Today's meals lean heavier on protein to keep your energy steady.`,
+    };
+  }
+  if (ctx.latestSleepQuality === "poor" || ctx.latestSleepQuality === "bad") {
+    return {
+      nameGreeting,
+      message: "Rough night. I've weighted today's meals toward recovery — more magnesium, less sugar.",
+    };
+  }
+
+  // Stress-based greetings
+  if (ctx.latestStressTags.length > 0) {
+    const tag = ctx.latestStressTags[0];
+    const stressMessages: Record<string, string> = {
+      work: "Work stress showing up. Today's meals are anti-cortisol — protein-forward to keep you level.",
+      sleep: "Sleep stress flagged. I've adjusted your meals to support recovery today.",
+      family: "Family stress is real. Today's meals are comfort-forward without the crash.",
+      health: "Health stress noted. I've tuned your meals to support your body, not add to the load.",
+    };
+    return {
+      nameGreeting,
+      message: stressMessages[tag] || `Stress from ${tag} — today's meals are adjusted to help your body recover.`,
+    };
+  }
+
+  // Energy-based greetings
+  if (ctx.latestEnergy === "low" || ctx.latestEnergy === "very_low") {
+    return {
+      nameGreeting,
+      message: `Low energy yesterday. I've front-loaded protein at breakfast and added slow carbs at lunch.`,
+    };
+  }
+  if (ctx.latestEnergy === "high" || ctx.latestEnergy === "very_high") {
+    return {
+      nameGreeting,
+      message: `Your energy was solid yesterday. Today's plan keeps that momentum — same balance, slight variety.`,
+    };
+  }
+
+  // Moderate / generic recent check-in
+  return {
+    nameGreeting,
+    message: `Your check-in is in. ${type.whyLineSeed}`,
+  };
+}
+
+function getRecentScanGreeting(ctx: GreetingContext): GreetingResult {
+  const nameGreeting = ctx.userName ? `${ctx.userName}.` : "Hey.";
+  const scan = ctx.latestScan;
+
+  const stressIndex = scanVal(scan, "stressIndex");
+  const heartRate = scanVal(scan, "heartRate");
+  const recoveryScore = scanVal(scan, "recoveryScore");
+  const wellness = scanVal(scan, "wellnessIndex");
+
+  if (stressIndex) {
+    const level = Number(stressIndex) > 60 ? "elevated" : Number(stressIndex) > 40 ? "moderate" : "low";
+    return {
+      nameGreeting,
+      message: `Stress index at ${stressIndex} — ${level}. Today's meals are calibrated to match.`,
+    };
+  }
+  if (heartRate) {
+    return {
+      nameGreeting,
+      message: `Resting at ${heartRate} bpm. Your meals today are tuned to that baseline.`,
+    };
+  }
+  if (recoveryScore) {
+    return {
+      nameGreeting,
+      message: `Recovery score: ${recoveryScore}. That shapes how I fuel you today.`,
+    };
+  }
+  if (wellness) {
+    return {
+      nameGreeting,
+      message: `Wellness at ${wellness}. I'm using that to dial in today's plan.`,
+    };
+  }
+
+  return {
+    nameGreeting,
+    message: "Fresh scan in. I'm using your latest numbers to shape today's meals.",
+  };
+}
+
+// ---------- No recent data greeting (> 24 h) ----------
+
+function getStaleDataGreeting(ctx: GreetingContext): GreetingResult {
+  const nameGreeting = ctx.userName ? `${ctx.userName}.` : "Hey.";
+
+  if (ctx.hasScan) {
+    return {
+      nameGreeting,
+      message: "I'm working from older data. A quick scan or check-in sharpens your meals today.",
+      embedAction: "energy_checkin",
+    };
+  }
+
+  return {
+    nameGreeting,
+    message: "I haven't heard from you today. A quick check-in sharpens your meals.",
+    embedAction: "energy_checkin",
+  };
+}
+
 // ---------- Main greeting router ----------
 
 export function generateGreeting(ctx: GreetingContext): GreetingResult {
   let result: GreetingResult;
 
+  const hasRecentCheckIn = isWithin24Hours(ctx.lastCheckInAt);
+  const hasRecentScan = isWithin24Hours(ctx.lastScanAt);
+  const hasAnyRecentData = hasRecentCheckIn || hasRecentScan;
+
   // Priority 1: Lapse
   if (ctx.lapseTier > 0) {
     result = getLapseGreeting(ctx);
   }
-  // Priority 2: Has scan — buffer revelations always take priority
+  // Priority 2: No recent data (> 24 h) — prompt to scan or check in
+  else if (!hasAnyRecentData && ctx.dayNumber >= 2 && !ctx.isGlanceOnly) {
+    result = getStaleDataGreeting(ctx);
+  }
+  // Priority 3: Recent check-in with a notable signal — surface it
+  else if (hasRecentCheckIn && hasNotableSignal(ctx)) {
+    result = getRecentCheckInGreeting(ctx);
+  }
+  // Priority 4: Recent scan — surface a metric
+  else if (hasRecentScan && ctx.latestScan) {
+    result = getRecentScanGreeting(ctx);
+  }
+  // Priority 5: Has scan — day-progression revelations
   else if (ctx.hasScan) {
     if (ctx.dayNumber <= 1) {
       result = getScanDay1Greeting(ctx);
@@ -399,11 +556,11 @@ export function generateGreeting(ctx: GreetingContext): GreetingResult {
       result = getScanDay15PlusGreeting(ctx);
     }
   }
-  // Priority 3: Glance-only (non-scan users with no engagement)
+  // Priority 6: Glance-only (non-scan users with no engagement)
   else if (ctx.isGlanceOnly) {
     result = getGlanceOnlyGreeting(ctx);
   }
-  // Priority 4: No scan (skip)
+  // Priority 7: No scan (skip) — day-progression
   else {
     if (ctx.dayNumber <= 1) {
       result = getSkipDay1Greeting(ctx);
@@ -434,10 +591,13 @@ export function generateSimpleGreeting(ctx: {
     latestEnergy: null,
     latestStressTags: [],
     latestSleepQuality: null,
+    latestSleepHours: null,
     scanCount: 0,
     latestScan: null,
     esterTier: "Pattern Acknowledgment",
     compositeConfidence: 35,
+    lastCheckInAt: null,
+    lastScanAt: null,
     daysSinceLastCheckIn: null,
     isGlanceOnly: false,
     lapseTier: 0,

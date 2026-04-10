@@ -6,10 +6,15 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  TextInput,
+  Modal,
   Dimensions,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { K, MetabolicType } from "../constants/colors";
+import { useToast } from "../context/ToastContext";
 import { typography, spacing, radius } from "../constants/typography";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -33,12 +38,14 @@ export interface Meal {
   cuisineCluster?: string;
 }
 
-// Feedback tags when thumbs down is selected
+// Feedback tags for the bottom sheet
 const FEEDBACK_TAGS = [
   { id: "complex", label: "Too complex" },
   { id: "taste", label: "Didn't like taste" },
   { id: "long", label: "Too long" },
   { id: "not_full", label: "Didn't keep me full" },
+  { id: "ingredients", label: "Don't like ingredients" },
+  { id: "repetitive", label: "Had this recently" },
 ];
 
 interface MealCardProps {
@@ -48,45 +55,51 @@ interface MealCardProps {
   initialFeedback?: "up" | "down" | null;
   initialTags?: string[];
   onPress?: () => void;
-  onFeedback?: (feedback: "up" | "down", tags?: string[]) => void;
+  onFeedback?: (feedback: "up" | "down", tags?: string[], freeText?: string) => void;
+  onUndoFeedback?: () => void;
   onChatPress?: () => void;
   onRecipePress?: () => void;
   onFavoriteToggle?: (isFavorited: boolean) => void;
-  onReplace?: () => void;  // "Get different option" callback
+  onReplace?: () => void;
 }
 
-export function MealCard({ meal, metabolicType, isFavorited = false, initialFeedback = null, initialTags = [], onPress, onFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace }: MealCardProps) {
+export function MealCard({ meal, metabolicType, isFavorited = false, initialFeedback = null, initialTags = [], onPress, onFeedback, onUndoFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace }: MealCardProps) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(initialFeedback);
-  const [showTags, setShowTags] = useState(false);
-  const [selectedTags, setSelectedTags] = useState<string[]>(initialTags);
+  const [showSheet, setShowSheet] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [freeText, setFreeText] = useState("");
   const [favorited, setFavorited] = useState(isFavorited);
+  const toast = useToast();
 
-  // Sync feedback and tags when props change (e.g., loaded from API)
   useEffect(() => {
     setFeedback(initialFeedback);
-    if (initialTags.length > 0) setSelectedTags(initialTags);
   }, [initialFeedback]);
 
-  // Sync local state when prop changes (e.g., favorites loaded from API)
   useEffect(() => {
     setFavorited(isFavorited);
   }, [isFavorited]);
 
   const handleThumbsUp = () => {
-    if (feedback === "up") return; // Already sent — don't re-send
+    if (feedback === "up") {
+      setFeedback(null);
+      onUndoFeedback?.();
+      return;
+    }
     setFeedback("up");
-    setShowTags(false);
     onFeedback?.("up");
+    toast.show({ message: "Thanks for your feedback", icon: "✓" });
   };
 
   const handleThumbsDown = () => {
     if (feedback === "down") {
-      // Already down — toggle tags panel visibility
-      setShowTags((prev) => !prev);
-    } else {
-      setFeedback("down");
-      setShowTags(true);
+      setFeedback(null);
+      onUndoFeedback?.();
+      return;
     }
+    setFeedback("down");
+    setSelectedTags([]);
+    setFreeText("");
+    setShowSheet(true);
   };
 
   const toggleTag = (tagId: string) => {
@@ -98,17 +111,9 @@ export function MealCard({ meal, metabolicType, isFavorited = false, initialFeed
   };
 
   const submitFeedback = () => {
-    // Only send to backend if tags actually changed
-    const sorted = [...selectedTags].sort();
-    const sortedInitial = [...initialTags].sort();
-    const changed = feedback !== initialFeedback ||
-      sorted.length !== sortedInitial.length ||
-      sorted.some((t, i) => t !== sortedInitial[i]);
-
-    if (changed) {
-      onFeedback?.("down", selectedTags);
-    }
-    setShowTags(false);
+    onFeedback?.("down", selectedTags, freeText.trim() || undefined);
+    setShowSheet(false);
+    toast.show({ message: "Thanks for your feedback", icon: "✓" });
   };
 
   return (
@@ -212,47 +217,65 @@ export function MealCard({ meal, metabolicType, isFavorited = false, initialFeed
           )}
         </View>
 
-        {/* Feedback tags (shown after thumbs down) */}
-        {showTags && (
-          <View style={styles.tagsContainer}>
-            <Text style={styles.tagsLabel}>What didn't work?</Text>
-            <View style={styles.tagsRow}>
-              {FEEDBACK_TAGS.map((tag) => (
-                <TouchableOpacity
-                  key={tag.id}
-                  style={[
-                    styles.tagPill,
-                    selectedTags.includes(tag.id) && styles.tagPillSelected,
-                  ]}
-                  onPress={() => toggleTag(tag.id)}
-                >
-                  <Text
-                    style={[
-                      styles.tagText,
-                      selectedTags.includes(tag.id) && styles.tagTextSelected,
-                    ]}
-                  >
-                    {tag.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {selectedTags.length > 0 && (
-              <TouchableOpacity style={styles.submitButton} onPress={submitFeedback}>
-                <Text style={styles.submitText}>Submit</Text>
-              </TouchableOpacity>
-            )}
-            {onReplace && (
-              <TouchableOpacity style={styles.replaceButton} onPress={() => {
-                submitFeedback();
-                onReplace();
-              }}>
-                <Text style={styles.replaceText}>Get different option</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
       </View>
+
+      {/* Feedback bottom sheet */}
+      <Modal visible={showSheet} transparent animationType="slide" onRequestClose={() => setShowSheet(false)}>
+        <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={() => setShowSheet(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={styles.sheetContainer}>
+                <View style={styles.sheetHeader}>
+                  <TouchableOpacity onPress={() => setShowSheet(false)}>
+                    <Text style={styles.sheetClose}>×</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.sheetTitle}>Provide feedback</Text>
+                  <View style={{ width: 24 }} />
+                </View>
+                <View style={styles.tagsRow}>
+                  {FEEDBACK_TAGS.map((tag) => (
+                    <TouchableOpacity
+                      key={tag.id}
+                      style={[styles.tagPill, selectedTags.includes(tag.id) && styles.tagPillSelected]}
+                      onPress={() => toggleTag(tag.id)}
+                    >
+                      <Text style={[styles.tagText, selectedTags.includes(tag.id) && styles.tagTextSelected]}>
+                        {tag.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.freeTextInput}
+                  placeholder="Write any feedback"
+                  placeholderTextColor={K.faded}
+                  value={freeText}
+                  onChangeText={setFreeText}
+                  multiline
+                  maxLength={300}
+                />
+                <TouchableOpacity
+                  style={[styles.submitButton, !selectedTags.length && !freeText.trim() && styles.submitButtonDisabled]}
+                  onPress={submitFeedback}
+                  disabled={!selectedTags.length && !freeText.trim()}
+                >
+                  <Text style={styles.submitText}>Submit</Text>
+                </TouchableOpacity>
+                {onReplace && (
+                  <TouchableOpacity style={styles.replaceButton} onPress={() => {
+                    onFeedback?.("down", selectedTags, freeText.trim() || undefined);
+                    setShowSheet(false);
+                    toast.show({ message: "Thanks for your feedback", icon: "✓" });
+                    onReplace();
+                  }}>
+                    <Text style={styles.replaceText}>Get different option</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
     </TouchableOpacity>
   );
 }
@@ -265,14 +288,15 @@ interface MealCardSlotProps {
   favoritedMealIds?: Set<string>;
   mealFeedback?: Record<string, { feedback: "up" | "down"; tags: string[] }>;
   onMealPress?: (meal: Meal) => void;
-  onFeedback?: (mealId: string, feedback: "up" | "down", tags?: string[]) => void;
+  onFeedback?: (mealId: string, feedback: "up" | "down", tags?: string[], freeText?: string) => void;
+  onUndoFeedback?: (mealId: string) => void;
   onChatPress?: (meal: Meal) => void;
   onRecipePress?: (meal: Meal) => void;
   onFavoriteToggle?: (mealId: string, isFavorited: boolean) => void;
   onReplace?: (mealId: string, slot: string) => void;
 }
 
-export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, mealFeedback, onMealPress, onFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace }: MealCardSlotProps) {
+export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, mealFeedback, onMealPress, onFeedback, onUndoFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace }: MealCardSlotProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -315,7 +339,8 @@ export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, me
               initialFeedback={mealFeedback?.[meal.id]?.feedback ?? null}
               initialTags={mealFeedback?.[meal.id]?.tags ?? []}
               onPress={() => onMealPress?.(meal)}
-              onFeedback={(fb, tags) => onFeedback?.(meal.id, fb, tags)}
+              onFeedback={(fb, tags, ft) => onFeedback?.(meal.id, fb, tags, ft)}
+              onUndoFeedback={onUndoFeedback ? () => onUndoFeedback(meal.id) : undefined}
               onChatPress={onChatPress ? () => onChatPress(meal) : undefined}
               onRecipePress={onRecipePress ? () => onRecipePress(meal) : undefined}
               onFavoriteToggle={onFavoriteToggle ? (fav) => onFavoriteToggle(meal.id, fav) : undefined}
@@ -478,16 +503,44 @@ const styles = StyleSheet.create({
     color: K.brown,
     fontWeight: "600",
   },
-  tagsContainer: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: K.border,
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
   },
-  tagsLabel: {
-    ...typography.caption,
-    color: K.textMuted,
-    marginBottom: spacing.sm,
+  sheetContainer: {
+    backgroundColor: K.white,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+    paddingBottom: 40,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.lg,
+  },
+  sheetClose: {
+    fontSize: 24,
+    color: K.brown,
+    fontWeight: "300",
+  },
+  sheetTitle: {
+    ...typography.bodyMedium,
+    color: K.brown,
+    fontWeight: "600",
+  },
+  freeTextInput: {
+    backgroundColor: K.bone,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    ...typography.body,
+    color: K.brown,
+    minHeight: 80,
+    textAlignVertical: "top",
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
   tagsRow: {
     flexDirection: "row",
@@ -514,12 +567,14 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   submitButton: {
-    marginTop: spacing.md,
     backgroundColor: K.brown,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.full,
-    alignSelf: "flex-start",
+    alignItems: "center",
+  },
+  submitButtonDisabled: {
+    opacity: 0.4,
   },
   submitText: {
     ...typography.caption,

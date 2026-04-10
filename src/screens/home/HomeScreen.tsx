@@ -36,6 +36,7 @@ import {
   submitMealFeedback,
   getMealFeedback,
   replaceMealInSlot,
+  removeMealFeedback,
   cacheDailyPlan,
   getCachedDailyPlan,
 } from "../../services/meals";
@@ -281,7 +282,7 @@ export function HomeScreen() {
     navigation.navigate("EsterChat", { context: "meal", meal });
   };
 
-  const handleFeedback = async (mealId: string, feedback: "up" | "down", tags?: string[]) => {
+  const handleFeedback = async (mealId: string, feedback: "up" | "down", tags?: string[], freeText?: string) => {
     // Determine the slot from the meal
     const slot = breakfastMeals.find(m => m.id === mealId) ? "breakfast"
       : lunchMeals.find(m => m.id === mealId) ? "lunch"
@@ -300,10 +301,24 @@ export function HomeScreen() {
         slot,
         feedback,
         tags,
+        freeText,
       });
       BrazeService.logEvent("meal_feedback_submitted", { slot, feedback });
     } catch {
       // Feedback still recorded locally via optimistic update
+    }
+  };
+
+  const handleUndoFeedback = async (mealId: string) => {
+    setMealFeedback((prev) => {
+      const next = { ...prev };
+      delete next[mealId];
+      return next;
+    });
+    try {
+      await removeMealFeedback(mealId);
+    } catch {
+      // Non-critical
     }
   };
 
@@ -349,8 +364,8 @@ export function HomeScreen() {
       const updatedPlan = await replaceMealInSlot(dailyPlan.id, slot, excludeIds, mealId);
       setDailyPlan(updatedPlan);
       cacheDailyPlan(updatedPlan);
-    } catch {
-      // Keep current plan if replacement fails
+    } catch (err) {
+      console.warn("[handleReplace] failed:", err);
     }
   };
 
@@ -490,6 +505,7 @@ export function HomeScreen() {
           mealFeedback={mealFeedback}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
+          onUndoFeedback={handleUndoFeedback}
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
           onFavoriteToggle={handleFavoriteToggle}
@@ -505,6 +521,7 @@ export function HomeScreen() {
           mealFeedback={mealFeedback}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
+          onUndoFeedback={handleUndoFeedback}
           onChatPress={handleMealChatPress}
           onRecipePress={handleRecipePress}
           onFavoriteToggle={handleFavoriteToggle}
@@ -521,6 +538,7 @@ export function HomeScreen() {
             mealFeedback={mealFeedback}
             onMealPress={handleMealPress}
             onFeedback={handleFeedback}
+          onUndoFeedback={handleUndoFeedback}
             onChatPress={handleMealChatPress}
             onRecipePress={handleRecipePress}
             onFavoriteToggle={handleFavoriteToggle}

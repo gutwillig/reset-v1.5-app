@@ -13,6 +13,7 @@ import {
   DMSans_700Bold,
 } from "@expo-google-fonts/dm-sans";
 import { AppProvider } from "./src/context/AppContext";
+import { ToastProvider } from "./src/context/ToastContext";
 import { RootNavigator } from "./src/navigation";
 import { K } from "./src/constants/colors";
 
@@ -36,8 +37,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppProvider>
-        <StatusBar style="dark" />
-        <RootNavigator />
+        <ToastProvider>
+          <StatusBar style="dark" />
+          <RootNavigator />
+        </ToastProvider>
       </AppProvider>
     </SafeAreaProvider>
   );

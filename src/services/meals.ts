@@ -172,6 +172,7 @@ export interface MealFeedbackPayload {
   slot: string;
   feedback: "up" | "down";
   tags?: string[];
+  freeText?: string;
 }
 
 export async function submitMealFeedback(
@@ -181,6 +182,10 @@ export async function submitMealFeedback(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function removeMealFeedback(mealId: string): Promise<void> {
+  await apiClient(`/api/meals/feedback/${mealId}`, { method: "DELETE" });
 }
 
 export async function getMealFeedback(

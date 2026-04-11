@@ -100,13 +100,13 @@ export function HomeScreen() {
     const checkInCount = profile.layer2.energyLog.length;
     const mealFeedbackCount = profile.layer2.mealFeedback.length;
     const lastEnergy = profile.layer2.energyLog.length > 0
-      ? profile.layer2.energyLog[profile.layer2.energyLog.length - 1].energy
+      ? profile.layer2.energyLog[0].energy
       : null;
     const lastStress = profile.layer2.stressTags.length > 0
-      ? profile.layer2.stressTags[profile.layer2.stressTags.length - 1].tags
+      ? profile.layer2.stressTags[0].tags
       : [];
     const lastSleepEntry = profile.layer2.sleepLog.length > 0
-      ? profile.layer2.sleepLog[profile.layer2.sleepLog.length - 1]
+      ? profile.layer2.sleepLog[0]
       : null;
 
     // Recency timestamps for dynamic greetings
@@ -158,9 +158,10 @@ export function HomeScreen() {
     profile?.layer3?.latestScan?.scannedAt ?? null,
   );
 
-  // Biometric freshness gate (24-hour window)
+  // Biometric freshness gate (24-hour window) — scan OR check-in counts as fresh
   const lastScanAt = profile?.layer3?.latestScan?.scannedAt ?? null;
-  const { isFresh: biometricsFresh, ageLabel } = useBiometricFreshness(lastScanAt);
+  const lastCheckInDate = checkInHistory.length > 0 ? checkInHistory[0].date : null;
+  const { isFresh: biometricsFresh, ageLabel } = useBiometricFreshness(lastScanAt, lastCheckInDate);
   const showStaleBanner = !biometricsFresh && (profile?.layer3?.scanCount ?? 0) > 0;
 
   // Priority: yap > scan > observation

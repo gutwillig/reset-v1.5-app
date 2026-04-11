@@ -101,11 +101,14 @@ export function ProfileScreen() {
       };
     });
 
-  // Biometric freshness gate (24-hour window)
+  // Biometric freshness gate (24-hour window) — scan OR check-in counts as fresh
   const lastScanAt = profile?.layer3?.latestScan?.scannedAt ?? null;
-  const { isFresh: biometricsFresh, ageLabel } = useBiometricFreshness(lastScanAt);
+  const lastCheckInDate = profile?.layer2?.energyLog?.length
+    ? profile.layer2.energyLog[0].date
+    : null;
+  const { isFresh: biometricsFresh, ageLabel } = useBiometricFreshness(lastScanAt, lastCheckInDate);
 
-  // Signal card values — overlay real scan data only when fresh
+  // Signal card values — only show when data is fresh
   const latestScan = biometricsFresh ? profile?.layer3.latestScan : null;
   const stressValue = latestScan ? `${latestScan.stressIndex ?? latestScan.stress_index}` : typeConfig.signals.stress;
   const recoveryValue = latestScan
@@ -183,47 +186,56 @@ export function ProfileScreen() {
           </View>
         )}
 
-        {/* Signal Cards Grid */}
+        {/* Signal Cards Grid — hidden when data is stale */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>YOUR SIGNALS</Text>
-          {!biometricsFresh && hasScan && (
+          {biometricsFresh ? (
+            <>
+              <View style={styles.signalGrid}>
+                {/* Stress Card */}
+                <View style={styles.signalCard}>
+                  {tier === "free" && <BlurOverlay />}
+                  <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(latestScan ? "high" : typeConfig.signals.stress) }]} />
+                  <Text style={styles.signalCardLabel}>Stress</Text>
+                  <Text style={styles.signalCardValue}>{latestScan ? `Stress: ${stressValue}` : stressValue}</Text>
+                </View>
+                {/* Energy Card */}
+                <View style={styles.signalCard}>
+                  {tier === "free" && <BlurOverlay />}
+                  <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(typeConfig.signals.energy) }]} />
+                  <Text style={styles.signalCardLabel}>Energy</Text>
+                  <Text style={styles.signalCardValue}>{energyValue}</Text>
+                </View>
+                {/* Recovery Card */}
+                <View style={styles.signalCard}>
+                  {tier === "free" && <BlurOverlay />}
+                  <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(latestScan ? "building" : typeConfig.signals.recovery) }]} />
+                  <Text style={styles.signalCardLabel}>Recovery</Text>
+                  <Text style={styles.signalCardValue}>{latestScan ? `Recovery: ${recoveryValue}` : recoveryValue}</Text>
+                </View>
+              </View>
+              {tier === "free" && (
+                <TouchableOpacity style={styles.upgradeHint}>
+                  <Text style={styles.upgradeHintText}>Upgrade to unlock full signal tracking</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
             <TouchableOpacity
-              style={styles.staleBanner}
-              onPress={() => navigation.navigate("Scan", { mode: "rescan" })}
+              style={styles.staleNudge}
+              onPress={() => hasScan
+                ? navigation.navigate("Scan", { mode: "rescan" })
+                : navigation.navigate("EsterChat", { context: "general" })
+              }
             >
-              <Text style={styles.staleBannerText}>
-                {ageLabel
-                  ? `Last reading: ${ageLabel}. Tap to refresh your signals.`
-                  : "Your signals need a fresh reading. Tap to scan."}
+              <Text style={styles.staleNudgeTitle}>
+                {ageLabel ? `Last reading: ${ageLabel}` : "No recent signals"}
               </Text>
-            </TouchableOpacity>
-          )}
-          <View style={styles.signalGrid}>
-            {/* Stress Card */}
-            <View style={styles.signalCard}>
-              {tier === "free" && <BlurOverlay />}
-              <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(latestScan ? "high" : typeConfig.signals.stress) }]} />
-              <Text style={styles.signalCardLabel}>Stress</Text>
-              <Text style={styles.signalCardValue}>{latestScan ? `Stress: ${stressValue}` : stressValue}</Text>
-            </View>
-            {/* Energy Card */}
-            <View style={styles.signalCard}>
-              {tier === "free" && <BlurOverlay />}
-              <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(typeConfig.signals.energy) }]} />
-              <Text style={styles.signalCardLabel}>Energy</Text>
-              <Text style={styles.signalCardValue}>{energyValue}</Text>
-            </View>
-            {/* Recovery Card */}
-            <View style={styles.signalCard}>
-              {tier === "free" && <BlurOverlay />}
-              <View style={[styles.signalIndicator, { backgroundColor: getSignalColor(latestScan ? "building" : typeConfig.signals.recovery) }]} />
-              <Text style={styles.signalCardLabel}>Recovery</Text>
-              <Text style={styles.signalCardValue}>{latestScan ? `Recovery: ${recoveryValue}` : recoveryValue}</Text>
-            </View>
-          </View>
-          {tier === "free" && (
-            <TouchableOpacity style={styles.upgradeHint}>
-              <Text style={styles.upgradeHintText}>Upgrade to unlock full signal tracking</Text>
+              <Text style={styles.staleNudgeBody}>
+                {hasScan
+                  ? "A fresh scan sharpens your meal recommendations. Tap to scan."
+                  : "A quick check-in helps Ester tune your meals. Tap to start."}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -379,18 +391,21 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: spacing.md,
   },
-  staleBanner: {
+  staleNudge: {
     backgroundColor: K.bone,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
   },
-  staleBannerText: {
-    ...typography.caption,
+  staleNudgeTitle: {
+    ...typography.bodyMedium,
     color: K.ochre,
-    fontWeight: "500",
-    textAlign: "center",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  staleNudgeBody: {
+    ...typography.bodySmall,
+    color: K.textMuted,
+    lineHeight: 20,
   },
   newScanButton: {
     backgroundColor: K.ochre,

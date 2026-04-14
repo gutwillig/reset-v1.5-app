@@ -11,7 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "../../navigation/MainNavigator";
-import { K, TC } from "../../constants/colors";
+import { K, TC, toMetabolicType } from "../../constants/colors";
 import { typography, spacing, radius } from "../../constants/typography";
 import { TYPE_CONFIGS } from "../../constants/types";
 import { Avatar, Button } from "../../components";
@@ -53,11 +53,15 @@ function buildLpdEntries(profile: UserProfile): Array<{ date: string; note: stri
 export function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const { state, resetState } = useApp();
-  const metabolicType = state.user.metabolicType || "Explorer";
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  // Prefer backend profile over locally cached onboarding state so the screen
+  // reflects the server's source of truth (and tolerates legacy cached names).
+  const metabolicType =
+    toMetabolicType(profile?.layer1?.primaryBucket) ??
+    toMetabolicType(state.user.metabolicType) ??
+    "Explorer";
   const typeConfig = TYPE_CONFIGS[metabolicType];
   const colors = TC[metabolicType];
-
-  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   const loadProfile = useCallback(() => {
     getProfile().then(setProfile).catch(() => null);

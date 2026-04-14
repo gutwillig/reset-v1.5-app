@@ -33,6 +33,7 @@ import {
   addFavorite,
   removeFavorite,
   getDailyPlan,
+  getTomorrowPlan,
   submitMealFeedback,
   getMealFeedback,
   replaceMealInSlot,
@@ -42,6 +43,7 @@ import {
   toggleMealEaten,
 } from "../../services/meals";
 import type { DailyPlan, DailyPlanMeal } from "../../services/meals";
+import { getCurrentDayPart } from "../../utils/dayPart";
 import { submitCheckIn, getTodayCheckIn, getCheckInHistory } from "../../services/checkIn";
 import type { CheckInEntry } from "../../services/checkIn";
 import { getProfile } from "../../services/profile";
@@ -174,10 +176,19 @@ export function HomeScreen() {
   // Priority: yap > scan > observation
   const nudge = yapNudge || scanNudge || observationNudge;
   const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
+  const [tomorrowPlan, setTomorrowPlan] = useState<DailyPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mealFeedback, setMealFeedback] = useState<Record<string, { feedback: "up" | "down"; tags: string[] }>>({});
   const [eatenMealIds, setEatenMealIds] = useState<Set<string>>(new Set());
+
+  const dayPart = getCurrentDayPart();
+
+  const eatingWindowCloseHour = parseInt(
+    (profile?.layer1?.eatingWindowClose ?? "18:00").split(":")[0] ?? "18",
+    10,
+  );
+  const eatingWindowClosed = new Date().getHours() >= eatingWindowCloseHour;
 
   const { showPrompt, promptMeal, promptSlot, dismissPrompt, recordMealTap } = useFeedbackPrompt(dailyPlan, dayNumber);
 
@@ -237,6 +248,14 @@ export function HomeScreen() {
     ];
     setEatenMealIds(new Set(all));
   };
+
+  // In the evening, preview tomorrow's breakfast
+  useEffect(() => {
+    if (dayPart !== "evening") return;
+    getTomorrowPlan()
+      .then(setTomorrowPlan)
+      .catch(() => {});
+  }, [dayPart]);
 
   const loadDailyPlan = async () => {
     setPlanLoading(true);
@@ -425,6 +444,37 @@ export function HomeScreen() {
     }
   };
 
+  const handleTomorrowFeedback = async (mealId: string, feedback: "up" | "down", tags?: string[], freeText?: string) => {
+    setMealFeedback((prev) => ({
+      ...prev,
+      [mealId]: { feedback, tags: tags || [] },
+    }));
+    try {
+      await submitMealFeedback({
+        mealId,
+        planId: tomorrowPlan?.id,
+        slot: "breakfast",
+        feedback,
+        tags,
+        freeText,
+      });
+      BrazeService.logEvent("meal_feedback_submitted", { slot: "breakfast", feedback, preview: true });
+    } catch {
+      // Optimistic update preserved
+    }
+  };
+
+  const handleTomorrowReplace = async (mealId: string, slot: string) => {
+    if (!tomorrowPlan) return;
+    const excludeIds = tomorrowPlan.breakfast.map((m) => m.id);
+    try {
+      const updatedPlan = await replaceMealInSlot(tomorrowPlan.id, slot, excludeIds, mealId);
+      setTomorrowPlan(updatedPlan);
+    } catch (err) {
+      console.warn("[handleTomorrowReplace] failed:", err);
+    }
+  };
+
   const handleCheckInComplete = async (data: any): Promise<string | undefined> => {
     try {
       const result = await submitCheckIn({
@@ -552,66 +602,90 @@ export function HomeScreen() {
           </View>
         )}
 
-        {/* SLOT: Meal Cards - Breakfast */}
-        <MealCardSlot
-          label="Breakfast"
-          meals={breakfastMeals}
-          metabolicType={metabolicType}
-          favoritedMealIds={favoritedMeals}
-          eatenMealIds={eatenMealIds}
-          mealFeedback={mealFeedback}
-          onMealPress={handleMealPress}
-          onFeedback={handleFeedback}
-          onUndoFeedback={handleUndoFeedback}
-          onChatPress={handleMealChatPress}
-          onRecipePress={handleRecipePress}
-          onFavoriteToggle={handleFavoriteToggle}
-          onReplace={handleReplace}
-          onToggleEaten={handleToggleEaten}
-        />
-
-        {/* SLOT: Meal Cards - Lunch */}
-        <MealCardSlot
-          label="Lunch"
-          meals={lunchMeals}
-          metabolicType={metabolicType}
-          favoritedMealIds={favoritedMeals}
-          eatenMealIds={eatenMealIds}
-          mealFeedback={mealFeedback}
-          onMealPress={handleMealPress}
-          onFeedback={handleFeedback}
-          onUndoFeedback={handleUndoFeedback}
-          onChatPress={handleMealChatPress}
-          onRecipePress={handleRecipePress}
-          onFavoriteToggle={handleFavoriteToggle}
-          onReplace={handleReplace}
-          onToggleEaten={handleToggleEaten}
-        />
-
-        {/* SLOT: Meal Cards - Dinner (hidden after eating window close) */}
-        {dinnerMeals.length > 0 ? (
+        {/* SLOT: Meal Cards - Breakfast (morning only) */}
+        {dayPart === "morning" && (
           <MealCardSlot
-            label="Dinner"
-            meals={dinnerMeals}
+            label="Breakfast"
+            meals={breakfastMeals}
             metabolicType={metabolicType}
             favoritedMealIds={favoritedMeals}
             eatenMealIds={eatenMealIds}
             mealFeedback={mealFeedback}
             onMealPress={handleMealPress}
             onFeedback={handleFeedback}
-          onUndoFeedback={handleUndoFeedback}
+            onUndoFeedback={handleUndoFeedback}
             onChatPress={handleMealChatPress}
             onRecipePress={handleRecipePress}
             onFavoriteToggle={handleFavoriteToggle}
             onReplace={handleReplace}
             onToggleEaten={handleToggleEaten}
           />
-        ) : dailyPlan && new Date().getHours() >= parseInt(profile?.layer1?.eatingWindowClose?.split(":")[0] ?? "18", 10) && (
-          <View style={styles.windowClosedSlot}>
-            <Text style={styles.windowClosedText}>
-              Your evening window has closed. Your body is in recovery mode.
-            </Text>
-          </View>
+        )}
+
+        {/* SLOT: Meal Cards - Lunch (afternoon only) */}
+        {dayPart === "afternoon" && (
+          <MealCardSlot
+            label="Lunch"
+            meals={lunchMeals}
+            metabolicType={metabolicType}
+            favoritedMealIds={favoritedMeals}
+            eatenMealIds={eatenMealIds}
+            mealFeedback={mealFeedback}
+            onMealPress={handleMealPress}
+            onFeedback={handleFeedback}
+            onUndoFeedback={handleUndoFeedback}
+            onChatPress={handleMealChatPress}
+            onRecipePress={handleRecipePress}
+            onFavoriteToggle={handleFavoriteToggle}
+            onReplace={handleReplace}
+            onToggleEaten={handleToggleEaten}
+          />
+        )}
+
+        {/* SLOT: Meal Cards - Dinner (afternoon + evening; replaced by window-closed message after close) */}
+        {(dayPart === "afternoon" || dayPart === "evening") && dailyPlan && (
+          eatingWindowClosed ? (
+            <View style={styles.windowClosedSlot}>
+              <Text style={styles.windowClosedText}>
+                Your evening window has closed. Your body is in recovery mode.
+              </Text>
+            </View>
+          ) : dinnerMeals.length > 0 ? (
+            <MealCardSlot
+              label="Dinner"
+              meals={dinnerMeals}
+              metabolicType={metabolicType}
+              favoritedMealIds={favoritedMeals}
+              eatenMealIds={eatenMealIds}
+              mealFeedback={mealFeedback}
+              onMealPress={handleMealPress}
+              onFeedback={handleFeedback}
+              onUndoFeedback={handleUndoFeedback}
+              onChatPress={handleMealChatPress}
+              onRecipePress={handleRecipePress}
+              onFavoriteToggle={handleFavoriteToggle}
+              onReplace={handleReplace}
+              onToggleEaten={handleToggleEaten}
+            />
+          ) : null
+        )}
+
+        {/* SLOT: Meal Cards - Tomorrow's Breakfast preview (evening only) */}
+        {dayPart === "evening" && tomorrowPlan && tomorrowPlan.breakfast.length > 0 && (
+          <MealCardSlot
+            label="Tomorrow's Breakfast"
+            meals={tomorrowPlan.breakfast}
+            metabolicType={metabolicType}
+            favoritedMealIds={favoritedMeals}
+            mealFeedback={mealFeedback}
+            onMealPress={handleMealPress}
+            onFeedback={handleTomorrowFeedback}
+            onUndoFeedback={handleUndoFeedback}
+            onChatPress={handleMealChatPress}
+            onRecipePress={handleRecipePress}
+            onFavoriteToggle={handleFavoriteToggle}
+            onReplace={handleTomorrowReplace}
+          />
         )}
 
         {/* SLOT: Day 3 Ingredient Aversion Prompt */}
@@ -637,9 +711,9 @@ export function HomeScreen() {
           </View>
         )}
 
-        {/* Daily summary */}
-        {dailyPlan && (() => {
-          const plannedLeads = [breakfastMeals[0], lunchMeals[0], dinnerMeals[0]].filter(Boolean);
+        {/* Daily summary — Planned (lead meals) vs. Eaten (meals user marked) */}
+        {dailyPlan && (breakfastMeals[0] || lunchMeals[0] || dinnerMeals[0]) && (() => {
+          const plannedLeads = [breakfastMeals[0], lunchMeals[0], dinnerMeals[0]].filter(Boolean) as Meal[];
           const plannedCalories = Math.ceil(plannedLeads.reduce((s, m) => s + m.calories, 0));
           const plannedProtein = Math.ceil(plannedLeads.reduce((s, m) => s + m.protein, 0));
           const allMeals = [...breakfastMeals, ...lunchMeals, ...dinnerMeals];

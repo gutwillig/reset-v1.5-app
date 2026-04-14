@@ -39,6 +39,7 @@ import {
   removeMealFeedback,
   cacheDailyPlan,
   getCachedDailyPlan,
+  toggleMealEaten,
 } from "../../services/meals";
 import type { DailyPlan, DailyPlanMeal } from "../../services/meals";
 import { submitCheckIn, getTodayCheckIn, getCheckInHistory } from "../../services/checkIn";
@@ -176,6 +177,7 @@ export function HomeScreen() {
   const [planLoading, setPlanLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mealFeedback, setMealFeedback] = useState<Record<string, { feedback: "up" | "down"; tags: string[] }>>({});
+  const [eatenMealIds, setEatenMealIds] = useState<Set<string>>(new Set());
 
   const { showPrompt, promptMeal, promptSlot, dismissPrompt, recordMealTap } = useFeedbackPrompt(dailyPlan, dayNumber);
 
@@ -221,11 +223,27 @@ export function HomeScreen() {
     loadDailyPlan();
   }, []);
 
+  const applyEatenFromPlan = (plan: DailyPlan) => {
+    const eaten = plan.eatenMealIds;
+    if (!eaten) {
+      setEatenMealIds(new Set());
+      return;
+    }
+    const all = [
+      ...(eaten.breakfast ?? []),
+      ...(eaten.lunch ?? []),
+      ...(eaten.dinner ?? []),
+      ...(eaten.snack ?? []),
+    ];
+    setEatenMealIds(new Set(all));
+  };
+
   const loadDailyPlan = async () => {
     setPlanLoading(true);
     try {
       const plan = await getDailyPlan();
       setDailyPlan(plan);
+      applyEatenFromPlan(plan);
       cacheDailyPlan(plan);
       loadFeedbackForPlan(plan);
     } catch {
@@ -233,6 +251,7 @@ export function HomeScreen() {
       const cached = await getCachedDailyPlan();
       if (cached) {
         setDailyPlan(cached);
+        applyEatenFromPlan(cached);
         loadFeedbackForPlan(cached);
       }
       // Falls through to static data if no cache
@@ -363,6 +382,29 @@ export function HomeScreen() {
         } else {
           next.delete(mealId);
         }
+        return next;
+      });
+    }
+  };
+
+  const handleToggleEaten = async (mealId: string, slot: string) => {
+    if (!dailyPlan) return;
+    const wasEaten = eatenMealIds.has(mealId);
+    setEatenMealIds((prev) => {
+      const next = new Set(prev);
+      if (wasEaten) next.delete(mealId);
+      else next.add(mealId);
+      return next;
+    });
+    try {
+      await toggleMealEaten(dailyPlan.id, slot, mealId);
+      BrazeService.logEvent("meal_eaten_toggle", { slot, ate: !wasEaten });
+    } catch {
+      // Revert on failure
+      setEatenMealIds((prev) => {
+        const next = new Set(prev);
+        if (wasEaten) next.add(mealId);
+        else next.delete(mealId);
         return next;
       });
     }
@@ -516,6 +558,7 @@ export function HomeScreen() {
           meals={breakfastMeals}
           metabolicType={metabolicType}
           favoritedMealIds={favoritedMeals}
+          eatenMealIds={eatenMealIds}
           mealFeedback={mealFeedback}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
@@ -524,6 +567,7 @@ export function HomeScreen() {
           onRecipePress={handleRecipePress}
           onFavoriteToggle={handleFavoriteToggle}
           onReplace={handleReplace}
+          onToggleEaten={handleToggleEaten}
         />
 
         {/* SLOT: Meal Cards - Lunch */}
@@ -532,6 +576,7 @@ export function HomeScreen() {
           meals={lunchMeals}
           metabolicType={metabolicType}
           favoritedMealIds={favoritedMeals}
+          eatenMealIds={eatenMealIds}
           mealFeedback={mealFeedback}
           onMealPress={handleMealPress}
           onFeedback={handleFeedback}
@@ -540,6 +585,7 @@ export function HomeScreen() {
           onRecipePress={handleRecipePress}
           onFavoriteToggle={handleFavoriteToggle}
           onReplace={handleReplace}
+          onToggleEaten={handleToggleEaten}
         />
 
         {/* SLOT: Meal Cards - Dinner (hidden after eating window close) */}
@@ -549,6 +595,7 @@ export function HomeScreen() {
             meals={dinnerMeals}
             metabolicType={metabolicType}
             favoritedMealIds={favoritedMeals}
+            eatenMealIds={eatenMealIds}
             mealFeedback={mealFeedback}
             onMealPress={handleMealPress}
             onFeedback={handleFeedback}
@@ -557,6 +604,7 @@ export function HomeScreen() {
             onRecipePress={handleRecipePress}
             onFavoriteToggle={handleFavoriteToggle}
             onReplace={handleReplace}
+            onToggleEaten={handleToggleEaten}
           />
         ) : dailyPlan && new Date().getHours() >= parseInt(profile?.layer1?.eatingWindowClose?.split(":")[0] ?? "18", 10) && (
           <View style={styles.windowClosedSlot}>
@@ -590,31 +638,55 @@ export function HomeScreen() {
         )}
 
         {/* Daily summary */}
-        {breakfastMeals[0] && lunchMeals[0] && dinnerMeals[0] && (
-          <View style={styles.summary}>
-            <Text style={styles.summaryLabel}>TODAY'S NUTRITION</Text>
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>
-                  {Math.ceil(breakfastMeals[0].calories + lunchMeals[0].calories + dinnerMeals[0].calories)}
-                </Text>
-                <Text style={styles.summaryUnit}>calories</Text>
+        {dailyPlan && (() => {
+          const plannedLeads = [breakfastMeals[0], lunchMeals[0], dinnerMeals[0]].filter(Boolean);
+          const plannedCalories = Math.ceil(plannedLeads.reduce((s, m) => s + m.calories, 0));
+          const plannedProtein = Math.ceil(plannedLeads.reduce((s, m) => s + m.protein, 0));
+          const allMeals = [...breakfastMeals, ...lunchMeals, ...dinnerMeals];
+          const eatenMeals = allMeals.filter((m) => eatenMealIds.has(m.id));
+          const eatenCalories = Math.ceil(eatenMeals.reduce((s, m) => s + m.calories, 0));
+          const eatenProtein = Math.ceil(eatenMeals.reduce((s, m) => s + m.protein, 0));
+          return (
+            <View style={styles.summary}>
+              <Text style={styles.summaryLabel}>TODAY'S NUTRITION</Text>
+              <Text style={styles.summarySubLabel}>Planned</Text>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{plannedCalories}</Text>
+                  <Text style={styles.summaryUnit}>calories</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{plannedProtein}g</Text>
+                  <Text style={styles.summaryUnit}>protein</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{plannedLeads.length}</Text>
+                  <Text style={styles.summaryUnit}>meals</Text>
+                </View>
               </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>
-                  {Math.ceil(breakfastMeals[0].protein + lunchMeals[0].protein + dinnerMeals[0].protein)}g
-                </Text>
-                <Text style={styles.summaryUnit}>protein</Text>
-              </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>3</Text>
-                <Text style={styles.summaryUnit}>meals</Text>
+              <View style={styles.summarySectionDivider} />
+              <Text style={styles.summarySubLabel}>Eaten so far</Text>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{eatenCalories}</Text>
+                  <Text style={styles.summaryUnit}>calories</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{eatenProtein}g</Text>
+                  <Text style={styles.summaryUnit}>protein</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{eatenMeals.length}</Text>
+                  <Text style={styles.summaryUnit}>meals</Text>
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          );
+        })()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -721,6 +793,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: spacing.md,
     textAlign: "center",
+  },
+  summarySubLabel: {
+    ...typography.caption,
+    color: K.brown,
+    fontWeight: "600",
+    marginBottom: spacing.sm,
+    textAlign: "center",
+  },
+  summarySectionDivider: {
+    height: 1,
+    backgroundColor: K.border,
+    marginVertical: spacing.md,
   },
   summaryRow: {
     flexDirection: "row",

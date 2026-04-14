@@ -111,6 +111,10 @@ export async function refreshDailyPlan(): Promise<DailyPlan> {
   });
 }
 
+export async function getTomorrowPlan(): Promise<DailyPlan> {
+  return apiClient<DailyPlan>("/api/meals/daily-plan/tomorrow");
+}
+
 export async function replaceMealInSlot(
   planId: string,
   slot: string,

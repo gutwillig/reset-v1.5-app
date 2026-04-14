@@ -108,7 +108,7 @@ export const MEALS_BY_TYPE: Record<MetabolicType, Meal[]> = {
       time: "snack",
     },
   ],
-  Defender: [
+  Rebounder: [
     {
       id: "30f71dfe-47bb-4191-9331-ccb896a2fd1e",
       name: "Overnight Oats",
@@ -200,7 +200,7 @@ export const MEALS_BY_TYPE: Record<MetabolicType, Meal[]> = {
       imageUrl: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&h=300&fit=crop",
     },
     {
-      id: "defender-snack",
+      id: "rebounder-snack",
       name: "Veggie Sticks & Hummus",
       whyLine: "Satisfying without restriction mindset.",
       calories: 180,
@@ -209,7 +209,7 @@ export const MEALS_BY_TYPE: Record<MetabolicType, Meal[]> = {
       time: "snack",
     },
   ],
-  Restorer: [
+  Ember: [
     {
       id: "3b239734-456a-431f-97c6-c0e939034c25",
       name: "Avocado Toast with Eggs",
@@ -301,7 +301,7 @@ export const MEALS_BY_TYPE: Record<MetabolicType, Meal[]> = {
       imageUrl: "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=400&h=300&fit=crop",
     },
     {
-      id: "restorer-snack",
+      id: "ember-snack",
       name: "Chamomile & Walnuts",
       whyLine: "Calming nutrients. Supports your rebuild phase.",
       calories: 160,
@@ -310,7 +310,7 @@ export const MEALS_BY_TYPE: Record<MetabolicType, Meal[]> = {
       time: "snack",
     },
   ],
-  Shifter: [
+  Chameleon: [
     {
       id: "865ba9eb-d939-413f-aa8e-2b669db3568e",
       name: "Smoothie Bowl",
@@ -402,7 +402,7 @@ export const MEALS_BY_TYPE: Record<MetabolicType, Meal[]> = {
       imageUrl: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&h=300&fit=crop",
     },
     {
-      id: "shifter-snack",
+      id: "chameleon-snack",
       name: "Trail Mix",
       whyLine: "Flexible fuel for variable days.",
       calories: 200,

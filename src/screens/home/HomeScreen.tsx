@@ -490,8 +490,8 @@ export function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* SLOT: Shifter phase indicator */}
-        {profile?.layer1?.currentPhase && (profile?.layer1?.primaryBucket?.toLowerCase() === "shifter" || metabolicType.toLowerCase() === "shifter") && (
+        {/* SLOT: Chameleon phase indicator */}
+        {profile?.layer1?.currentPhase && (profile?.layer1?.primaryBucket?.toLowerCase() === "chameleon" || metabolicType.toLowerCase() === "chameleon") && (
           <View style={styles.phaseIndicatorSlot}>
             <Text style={styles.phaseIndicatorTitle}>
               {profile.layer1.currentPhase === "follicular" ? "Follicular phase meals" : "Luteal phase meals"}

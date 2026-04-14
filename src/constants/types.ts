@@ -32,10 +32,10 @@ export const TYPE_CONFIGS: Record<MetabolicType, TypeConfig> = {
       recovery: "fast",
     },
   },
-  Defender: {
-    name: "Defender",
+  Rebounder: {
+    name: "Rebounder",
     internalBucket: "Rebounder",
-    title: "The Defender",
+    title: "The Rebounder",
     tagline: "Your body learned to fight back against restriction.",
     description: "Your metabolism has adapted to protect itself. Calorie-sufficient meals rebuild metabolic trust — never deficit-framed.",
     corePhilosophy: "Calorie-sufficient, NEVER deficit-framed",
@@ -47,10 +47,10 @@ export const TYPE_CONFIGS: Record<MetabolicType, TypeConfig> = {
       recovery: "moderate",
     },
   },
-  Restorer: {
-    name: "Restorer",
+  Ember: {
+    name: "Ember",
     internalBucket: "Depleted",
-    title: "The Restorer",
+    title: "The Ember",
     tagline: "Your body needs to rebuild what's been missing.",
     description: "Your system has been running on empty. Micronutrient restoration brings back what's missing — never suggest eating less.",
     corePhilosophy: "Micronutrient restoration, never suggest eating less",
@@ -62,10 +62,10 @@ export const TYPE_CONFIGS: Record<MetabolicType, TypeConfig> = {
       recovery: "slow",
     },
   },
-  Shifter: {
-    name: "Shifter",
+  Chameleon: {
+    name: "Chameleon",
     internalBucket: "Cycler",
-    title: "The Shifter",
+    title: "The Chameleon",
     tagline: "Your metabolism follows its own rhythm.",
     description: "Your body responds to natural cycles. Phase-aware, rhythm-based meal timing works with your biology, not against it.",
     corePhilosophy: "Phase-aware, rhythm-based meal timing",
@@ -155,23 +155,23 @@ export function getQuizQ3Setup(q1: "afternoon_evening" | "random", q2: "crash" |
 // Type determination based on quiz answers (4 paths)
 export function determineType(q1: "afternoon_evening" | "random", q2: "crash" | "drift"): MetabolicType {
   // Path mapping based on spec:
-  // afternoon_evening + crash → Stress-Driven (Burner) or Depleted (Restorer)
-  // afternoon_evening + drift → Rebounder (Defender) or Unstructured (Explorer)
-  // random + crash → Depleted (Restorer) or Cycler (Shifter)
-  // random + drift → Unstructured (Explorer) or Cycler (Shifter)
+  // afternoon_evening + crash → Burner or Ember
+  // afternoon_evening + drift → Rebounder or Explorer
+  // random + crash → Ember or Chameleon
+  // random + drift → Explorer or Chameleon
 
   if (q1 === "afternoon_evening") {
     if (q2 === "crash") {
-      return "Burner"; // Primary: Stress-Driven
+      return "Burner";
     } else {
-      return "Defender"; // Primary: Rebounder
+      return "Rebounder";
     }
   } else {
     // random
     if (q2 === "crash") {
-      return "Restorer"; // Primary: Depleted
+      return "Ember";
     } else {
-      return "Explorer"; // Primary: Unstructured
+      return "Explorer";
     }
   }
 }

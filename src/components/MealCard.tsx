@@ -52,6 +52,7 @@ interface MealCardProps {
   meal: Meal;
   metabolicType?: MetabolicType;
   isFavorited?: boolean;
+  isEaten?: boolean;
   initialFeedback?: "up" | "down" | null;
   initialTags?: string[];
   onPress?: () => void;
@@ -61,9 +62,10 @@ interface MealCardProps {
   onRecipePress?: () => void;
   onFavoriteToggle?: (isFavorited: boolean) => void;
   onReplace?: () => void;
+  onToggleEaten?: () => void;
 }
 
-export function MealCard({ meal, metabolicType, isFavorited = false, initialFeedback = null, initialTags = [], onPress, onFeedback, onUndoFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace }: MealCardProps) {
+export function MealCard({ meal, metabolicType, isFavorited = false, isEaten = false, initialFeedback = null, initialTags = [], onPress, onFeedback, onUndoFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace, onToggleEaten }: MealCardProps) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(initialFeedback);
   const [showSheet, setShowSheet] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -179,6 +181,19 @@ export function MealCard({ meal, metabolicType, isFavorited = false, initialFeed
           </View>
         ) : null}
 
+        {/* Eaten toggle */}
+        {onToggleEaten && (
+          <TouchableOpacity
+            style={[styles.eatenButton, isEaten && styles.eatenButtonActive]}
+            onPress={onToggleEaten}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.eatenText, isEaten && styles.eatenTextActive]}>
+              {isEaten ? "✓ Eaten" : "I ate this"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Feedback row */}
         <View style={styles.feedbackRow}>
           <TouchableOpacity
@@ -286,6 +301,7 @@ interface MealCardSlotProps {
   label: string;
   metabolicType?: MetabolicType;
   favoritedMealIds?: Set<string>;
+  eatenMealIds?: Set<string>;
   mealFeedback?: Record<string, { feedback: "up" | "down"; tags: string[] }>;
   onMealPress?: (meal: Meal) => void;
   onFeedback?: (mealId: string, feedback: "up" | "down", tags?: string[], freeText?: string) => void;
@@ -294,9 +310,10 @@ interface MealCardSlotProps {
   onRecipePress?: (meal: Meal) => void;
   onFavoriteToggle?: (mealId: string, isFavorited: boolean) => void;
   onReplace?: (mealId: string, slot: string) => void;
+  onToggleEaten?: (mealId: string, slot: string) => void;
 }
 
-export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, mealFeedback, onMealPress, onFeedback, onUndoFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace }: MealCardSlotProps) {
+export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, eatenMealIds, mealFeedback, onMealPress, onFeedback, onUndoFeedback, onChatPress, onRecipePress, onFavoriteToggle, onReplace, onToggleEaten }: MealCardSlotProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -336,6 +353,7 @@ export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, me
               meal={meal}
               metabolicType={metabolicType}
               isFavorited={favoritedMealIds?.has(meal.id)}
+              isEaten={eatenMealIds?.has(meal.id)}
               initialFeedback={mealFeedback?.[meal.id]?.feedback ?? null}
               initialTags={mealFeedback?.[meal.id]?.tags ?? []}
               onPress={() => onMealPress?.(meal)}
@@ -345,6 +363,7 @@ export function MealCardSlot({ meals, label, metabolicType, favoritedMealIds, me
               onRecipePress={onRecipePress ? () => onRecipePress(meal) : undefined}
               onFavoriteToggle={onFavoriteToggle ? (fav) => onFavoriteToggle(meal.id, fav) : undefined}
               onReplace={onReplace ? () => onReplace(meal.id, label.toLowerCase()) : undefined}
+              onToggleEaten={onToggleEaten ? () => onToggleEaten(meal.id, label.toLowerCase()) : undefined}
             />
           </View>
         ))}
@@ -463,6 +482,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
+  },
+  eatenButton: {
+    alignSelf: "flex-start",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: K.brown,
+    backgroundColor: K.white,
+    marginBottom: spacing.sm,
+  },
+  eatenButtonActive: {
+    backgroundColor: K.ochre,
+    borderColor: K.ochre,
+  },
+  eatenText: {
+    ...typography.caption,
+    color: K.brown,
+    fontWeight: "600",
+  },
+  eatenTextActive: {
+    color: K.brown,
   },
   thumbButton: {
     width: 44,

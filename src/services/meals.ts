@@ -96,6 +96,12 @@ export interface DailyPlan {
   dinner: DailyPlanMeal[];
   snack?: DailyPlanMeal;
   signalAdjustments?: SignalAdjustments;
+  eatenMealIds?: {
+    breakfast: string[];
+    lunch: string[];
+    dinner: string[];
+    snack: string[];
+  };
 }
 
 const DAILY_PLAN_CACHE_KEY = "@reset_daily_plan";
@@ -124,6 +130,17 @@ export async function replaceMealInSlot(
   return apiClient<DailyPlan>("/api/meals/daily-plan/replace", {
     method: "POST",
     body: JSON.stringify({ planId, slot, excludeMealIds, replaceMealId }),
+  });
+}
+
+export async function toggleMealEaten(
+  dailyPlanId: string,
+  slot: string,
+  mealId: string,
+): Promise<{ ate: boolean }> {
+  return apiClient<{ ate: boolean }>("/api/meals/eaten/toggle", {
+    method: "POST",
+    body: JSON.stringify({ dailyPlanId, slot, mealId }),
   });
 }
 

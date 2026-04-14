@@ -30,22 +30,39 @@ export const K = {
 };
 
 // Metabolic Type Colors - Studio Kiln palette applied
-export type MetabolicType = "Burner" | "Defender" | "Restorer" | "Shifter" | "Explorer";
+export type MetabolicType = "Burner" | "Rebounder" | "Ember" | "Chameleon" | "Explorer";
+
+const METABOLIC_TYPES: readonly MetabolicType[] = [
+  "Burner",
+  "Rebounder",
+  "Ember",
+  "Chameleon",
+  "Explorer",
+];
+
+// Coerce an unknown string (e.g. cached onboarding state or server response)
+// into a valid MetabolicType, or null if it's missing/stale. Used by screens
+// that render type-specific UI so a legacy value like "Defender" doesn't crash
+// a TYPE_CONFIGS[metabolicType].title lookup.
+export function toMetabolicType(s: string | null | undefined): MetabolicType | null {
+  if (!s) return null;
+  return (METABOLIC_TYPES as readonly string[]).includes(s) ? (s as MetabolicType) : null;
+}
 
 export const TC: Record<MetabolicType, { bg: string; text: string }> = {
   Burner: {
     bg: K.ochre,   // Warm gold - stress-driven, high energy
     text: K.brown,
   },
-  Defender: {
+  Rebounder: {
     bg: K.blue,    // Slate blue - protective, steady
     text: K.brown,
   },
-  Restorer: {
+  Ember: {
     bg: K.bone,    // Warm neutral - rebuilding, calm
     text: K.brown,
   },
-  Shifter: {
+  Chameleon: {
     bg: "#8B7355", // Earthy brown variant - cyclical, grounded
     text: K.white,
   },

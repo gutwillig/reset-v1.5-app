@@ -5,12 +5,12 @@ import type { MetabolicType } from "../constants/colors";
 // Q1×Q2 matrix → secondary bucket
 const SECONDARY_BUCKET: Record<string, Record<string, MetabolicType>> = {
   afternoon_evening: {
-    crash: "Restorer",  // Burner primary → Restorer secondary
-    drift: "Explorer",  // Defender primary → Explorer secondary
+    crash: "Ember",     // Burner primary → Ember secondary
+    drift: "Explorer",  // Rebounder primary → Explorer secondary
   },
   random: {
-    crash: "Shifter",   // Restorer primary → Shifter secondary
-    drift: "Shifter",   // Explorer primary → Shifter secondary
+    crash: "Chameleon", // Ember primary → Chameleon secondary
+    drift: "Chameleon", // Explorer primary → Chameleon secondary
   },
 };
 

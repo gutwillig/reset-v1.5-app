@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "../../navigation/MainNavigator";
-import { K } from "../../constants/colors";
+import { K, toMetabolicType } from "../../constants/colors";
 import { typography, spacing, radius } from "../../constants/typography";
 import {
   EsterGreeting,
@@ -53,7 +53,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const { state } = useApp();
-  const metabolicType = state.user.metabolicType || "Explorer";
   const hasScanLocal = !!state.biometrics;
 
   // Use authenticated user name, fall back to onboarding name
@@ -68,6 +67,13 @@ export function HomeScreen() {
   // Profile + check-in history for rich greetings
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [checkInHistory, setCheckInHistory] = useState<CheckInEntry[]>([]);
+
+  // Prefer backend profile over locally cached onboarding state (tolerates
+  // legacy cached values like "Defender" that no longer exist in the union).
+  const metabolicType =
+    toMetabolicType(profile?.layer1?.primaryBucket) ??
+    toMetabolicType(state.user.metabolicType) ??
+    "Explorer";
 
   const loadProfile = useCallback(() => {
     Promise.all([
@@ -540,8 +546,8 @@ export function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* SLOT: Shifter phase indicator */}
-        {profile?.layer1?.currentPhase && (profile?.layer1?.primaryBucket?.toLowerCase() === "shifter" || metabolicType.toLowerCase() === "shifter") && (
+        {/* SLOT: Chameleon phase indicator */}
+        {profile?.layer1?.currentPhase && (profile?.layer1?.primaryBucket?.toLowerCase() === "chameleon" || metabolicType.toLowerCase() === "chameleon") && (
           <View style={styles.phaseIndicatorSlot}>
             <Text style={styles.phaseIndicatorTitle}>
               {profile.layer1.currentPhase === "follicular" ? "Follicular phase meals" : "Luteal phase meals"}

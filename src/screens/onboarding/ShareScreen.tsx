@@ -23,13 +23,13 @@ export function ShareScreen({ navigation }: Props) {
     if (metabolicType === "Burner") {
       return "Stress-driven metabolism detected";
     }
-    if (metabolicType === "Defender") {
+    if (metabolicType === "Rebounder") {
       return "Protective metabolism pattern";
     }
-    if (metabolicType === "Restorer") {
+    if (metabolicType === "Ember") {
       return "Energy restoration needed";
     }
-    if (metabolicType === "Shifter") {
+    if (metabolicType === "Chameleon") {
       return "Cyclical metabolism detected";
     }
     return "Balanced baseline metabolism";

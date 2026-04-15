@@ -74,6 +74,7 @@ export function AccountScreen({ navigation }: Props) {
       try {
         await syncOnboardingToBackend({
           metabolicType: state.user.metabolicType,
+          goal: state.user.goal,
           quizAnswers: state.user.quizAnswers,
           tastePreferences: state.user.tastePreferences,
           dietaryRestrictions: state.user.dietaryRestrictions,
@@ -125,6 +126,7 @@ export function AccountScreen({ navigation }: Props) {
       try {
         await syncOnboardingToBackend({
           metabolicType: state.user.metabolicType,
+          goal: state.user.goal,
           quizAnswers: state.user.quizAnswers,
           tastePreferences: state.user.tastePreferences,
           dietaryRestrictions: state.user.dietaryRestrictions,
@@ -174,6 +176,7 @@ export function AccountScreen({ navigation }: Props) {
       try {
         await syncOnboardingToBackend({
           metabolicType: state.user.metabolicType,
+          goal: state.user.goal,
           quizAnswers: state.user.quizAnswers,
           tastePreferences: state.user.tastePreferences,
           dietaryRestrictions: state.user.dietaryRestrictions,

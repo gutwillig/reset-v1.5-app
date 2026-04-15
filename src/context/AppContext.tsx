@@ -12,6 +12,7 @@ interface UserProfile {
   email?: string;
   name?: string;
   metabolicType?: MetabolicType;
+  goal?: string;
   quizAnswers: Record<string, string>;
   tastePreferences: string[];
   dietaryRestrictions: string[];
@@ -58,6 +59,7 @@ type AppAction =
   | { type: "LOAD_STATE"; payload: Omit<AppState, "auth" | "isLoading"> }
   | { type: "SET_QUIZ_ANSWER"; payload: { questionId: string; answer: string } }
   | { type: "SET_METABOLIC_TYPE"; payload: MetabolicType }
+  | { type: "SET_GOAL"; payload: string }
   | { type: "SET_BIOMETRICS"; payload: BiometricData }
   | { type: "SET_TASTE_PREFERENCES"; payload: string[] }
   | { type: "SET_DIETARY_RESTRICTIONS"; payload: string[] }
@@ -114,6 +116,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
         user: {
           ...state.user,
           metabolicType: action.payload,
+        },
+      };
+
+    case "SET_GOAL":
+      return {
+        ...state,
+        user: {
+          ...state.user,
+          goal: action.payload,
         },
       };
 
@@ -180,6 +191,7 @@ interface AppContextValue {
   dispatch: React.Dispatch<AppAction>;
   setQuizAnswer: (questionId: string, answer: string) => void;
   setMetabolicType: (type: MetabolicType) => void;
+  setGoal: (goal: string) => void;
   setBiometrics: (data: BiometricData) => void;
   setTastePreferences: (preferences: string[]) => void;
   setDietaryRestrictions: (restrictions: string[]) => void;
@@ -261,6 +273,12 @@ export function AppProvider({ children }: AppProviderProps) {
                     payload: profile.layer1.dietaryRestrictions,
                   });
                 }
+                if (profile.layer1.goal) {
+                  dispatch({
+                    type: "SET_GOAL",
+                    payload: profile.layer1.goal,
+                  });
+                }
                 dispatch({ type: "COMPLETE_ONBOARDING" });
               }
             } catch {
@@ -298,6 +316,10 @@ export function AppProvider({ children }: AppProviderProps) {
 
   const setMetabolicType = (type: MetabolicType) => {
     dispatch({ type: "SET_METABOLIC_TYPE", payload: type });
+  };
+
+  const setGoal = (goal: string) => {
+    dispatch({ type: "SET_GOAL", payload: goal });
   };
 
   const setBiometrics = (data: BiometricData) => {
@@ -348,6 +370,7 @@ export function AppProvider({ children }: AppProviderProps) {
     dispatch,
     setQuizAnswer,
     setMetabolicType,
+    setGoal,
     setBiometrics,
     setTastePreferences,
     setDietaryRestrictions,

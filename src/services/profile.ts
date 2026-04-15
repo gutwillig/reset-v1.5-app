@@ -5,6 +5,7 @@ export interface Layer1 {
   secondaryBucket: string | null;
   energyPattern: string | null;
   cravingType: string | null;
+  goal: string | null;
   dietaryRestrictions: string[];
   tasteCluster: string | null;
   tasteExclusions: string[];
@@ -64,6 +65,7 @@ export interface UpdateProfileData {
   secondaryBucket?: string;
   energyPattern?: string;
   cravingType?: string;
+  goal?: string;
   dietaryRestrictions?: string[];
   tasteCluster?: string;
   tasteExclusions?: string[];

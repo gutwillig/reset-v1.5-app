@@ -1,3 +1,4 @@
+export { GoalScreen } from "./GoalScreen";
 export { QuizScreen } from "./QuizScreen";
 export { CameraPermScreen } from "./CameraPermScreen";
 export { ScanScreen } from "./ScanScreen";

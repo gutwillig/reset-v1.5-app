@@ -65,7 +65,7 @@ export function CameraPermScreen({ navigation }: Props) {
         </View>
 
         <Text style={styles.explanation}>
-          Your skin shows subtle changes in blood flow that reveal your heart rate, stress levels, and metabolic signals — no wearable needed.
+          I pick up subtle changes in your skin to understand your stress patterns, energy, and heart rhythm.
         </Text>
 
         <View style={styles.illustration}>
@@ -86,21 +86,21 @@ export function CameraPermScreen({ navigation }: Props) {
             <Text style={styles.featureIcon}>🧘</Text>
             <View>
               <Text style={styles.featureTitle}>Stress Index</Text>
-              <Text style={styles.featureDesc}>Cortisol markers</Text>
+              <Text style={styles.featureDesc}>Stress patterns</Text>
             </View>
           </View>
           <View style={styles.feature}>
             <Text style={styles.featureIcon}>✨</Text>
             <View>
               <Text style={styles.featureTitle}>Wellness Score</Text>
-              <Text style={styles.featureDesc}>Overall metabolic health</Text>
+              <Text style={styles.featureDesc}>Your current baseline</Text>
             </View>
           </View>
           <View style={styles.feature}>
             <Text style={styles.featureIcon}>🫀</Text>
             <View>
               <Text style={styles.featureTitle}>Vascular Age</Text>
-              <Text style={styles.featureDesc}>Circulatory markers</Text>
+              <Text style={styles.featureDesc}>Circulation signals</Text>
             </View>
           </View>
         </View>

@@ -88,7 +88,7 @@ export function EsterChatScreen() {
 
   const defaultGreeting: Message = {
     id: "initial",
-    text: "I'm your physician in your pocket. Ask me anything about your meals, energy, or how you're feeling. I'm here to help.",
+    text: "I've been learning your patterns. Ask me anything.",
     sender: "ester",
     timestamp: new Date(),
   };
@@ -252,7 +252,7 @@ export function EsterChatScreen() {
           <Avatar size={36} state="neutral" />
           <View style={styles.headerInfo}>
             <Text style={styles.headerTitle}>Ester</Text>
-            <Text style={styles.headerSubtitle}>Your physician in your pocket</Text>
+            <Text style={styles.headerSubtitle}>Something that actually understands your body</Text>
           </View>
         </View>
         <TouchableOpacity style={styles.newChatButton} onPress={handleNewChat}>

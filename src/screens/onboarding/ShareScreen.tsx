@@ -21,7 +21,7 @@ export function ShareScreen({ navigation }: Props) {
   const getBiometricHeadline = () => {
     if (!state.biometrics) return null;
     if (metabolicType === "Burner") {
-      return "Stress-driven metabolism detected";
+      return "I'm seeing a stress-driven pattern";
     }
     if (metabolicType === "Rebounder") {
       return "Protective metabolism pattern";
@@ -30,7 +30,7 @@ export function ShareScreen({ navigation }: Props) {
       return "Energy restoration needed";
     }
     if (metabolicType === "Chameleon") {
-      return "Cyclical metabolism detected";
+      return "I'm seeing a cyclical pattern";
     }
     return "Balanced baseline metabolism";
   };

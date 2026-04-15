@@ -49,7 +49,7 @@ export function TasteScreen({ navigation }: Props) {
                 activeOpacity={0.8}
               >
                 <Image
-                  source={{ uri: cluster.image }}
+                  source={cluster.image}
                   style={styles.cardImage}
                 />
                 <View style={styles.cardContent}>

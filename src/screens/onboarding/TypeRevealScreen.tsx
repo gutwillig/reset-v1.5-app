@@ -22,20 +22,20 @@ export function TypeRevealScreen({ navigation }: Props) {
   const q1 = (state.user.quizAnswers.q1 as "afternoon_evening" | "random") || "afternoon_evening";
   const q2 = (state.user.quizAnswers.q2 as "crash" | "drift") || "crash";
 
-  // Determine type from quiz
-  const metabolicType = state.user.metabolicType || determineType(q1, q2);
+  // Always recompute from the current quiz answers so a stale cached type
+  // from a prior run doesn't override a fresh onboarding.
+  const metabolicType = determineType(q1, q2);
   const typeConfig = TYPE_CONFIGS[metabolicType];
   const colors = TC[metabolicType];
 
   // Get path-specific reveal text
   const revealText = getTypeRevealText(q1, q2, hasScan);
 
-  // Set type if not already set
   useEffect(() => {
-    if (!state.user.metabolicType) {
+    if (state.user.metabolicType !== metabolicType) {
       setMetabolicType(metabolicType);
     }
-  }, []);
+  }, [metabolicType]);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;

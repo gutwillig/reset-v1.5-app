@@ -22,7 +22,7 @@ export const TYPE_CONFIGS: Record<MetabolicType, TypeConfig> = {
     internalBucket: "Stress-Driven",
     title: "The Burner",
     tagline: "Your metabolism runs hot under stress.",
-    description: "Your body burns energy fast when stressed. Protein-forward meals stabilize your afternoon and prevent the crash that hijacks your hunger.",
+    description: "Your body burns energy fast when stressed. Protein-forward meals stabilize your afternoon and prevent the crash that shapes your hunger.",
     corePhilosophy: "Protein-forward, anti-cortisol, never skip meals",
     whyLineSeed: "Protein-forward to stabilize your afternoon.",
     traits: ["Fast metabolism", "Afternoon energy dips", "Stress-driven eating"],
@@ -37,7 +37,7 @@ export const TYPE_CONFIGS: Record<MetabolicType, TypeConfig> = {
     internalBucket: "Rebounder",
     title: "The Rebounder",
     tagline: "Your body learned to fight back against restriction.",
-    description: "Your metabolism has adapted to protect itself. Calorie-sufficient meals rebuild metabolic trust — never deficit-framed.",
+    description: "Your metabolism has adapted to protect itself. Calorie-sufficient meals help your metabolism find its rhythm again — never deficit-framed.",
     corePhilosophy: "Calorie-sufficient, NEVER deficit-framed",
     whyLineSeed: "Calorie-sufficient — your body needs fuel, not restriction.",
     traits: ["Protective metabolism", "Steady energy needs", "Recovery-focused"],
@@ -52,7 +52,7 @@ export const TYPE_CONFIGS: Record<MetabolicType, TypeConfig> = {
     internalBucket: "Depleted",
     title: "The Ember",
     tagline: "Your body needs to rebuild what's been missing.",
-    description: "Your system has been running on empty. Micronutrient restoration brings back what's missing — never suggest eating less.",
+    description: "Your system's been stretched thin. It needs consistent micronutrient support — never suggest eating less.",
     corePhilosophy: "Micronutrient restoration, never suggest eating less",
     whyLineSeed: "Iron and magnesium to rebuild what's been missing.",
     traits: ["Nutrient-depleted", "Low baseline energy", "Recovery-focused"],
@@ -140,7 +140,7 @@ export function getQuizQ2(q1Answer: "afternoon_evening" | "random") {
 export function getQuizQ3Setup(q1: "afternoon_evening" | "random", q2: "crash" | "drift") {
   const setups: Record<string, Record<string, string>> = {
     afternoon_evening: {
-      crash: "I think your body is sending a stress signal that's hijacking your hunger. I can tell you more — but I'd need to see it to be sure.",
+      crash: "I think your body is sending a stress signal that's shaping your hunger. I can tell you more — but I'd need to see it to be sure.",
       drift: "There's a pattern driving your evening eating. It's metabolic, not emotional. I'd need to see it to be sure.",
     },
     random: {
@@ -180,13 +180,13 @@ export function determineType(q1: "afternoon_evening" | "random", q2: "crash" | 
 export function getTypeRevealText(q1: "afternoon_evening" | "random", q2: "crash" | "drift", hasScan: boolean): string {
   if (hasScan) {
     if (q1 === "afternoon_evening" && q2 === "crash") {
-      return "I was right. Your stress signal is real — your cortisol markers are elevated and your body is burning energy inefficiently. I know exactly how to feed you.";
+      return "Your stress pattern is running high, and your energy's reacting to it. I know how to feed you.";
     }
     if (q1 === "afternoon_evening" && q2 === "drift") {
       return "Your scan confirms it — your body has learned to expect fuel at certain times. That gradual pull isn't hunger, it's metabolic memory.";
     }
     if (q1 === "random" && q2 === "crash") {
-      return "Your scan shows what I suspected — your body isn't holding fuel well. Energy is leaking at irregular intervals. I can fix that.";
+      return "Your energy's coming in waves right now. I'll smooth that out through how you eat.";
     }
     return "Your signals are quiet on the scan too — which actually makes my job easier. I can see the baseline clearly now.";
   }
@@ -205,30 +205,39 @@ export function getTypeRevealText(q1: "afternoon_evening" | "random", q2: "crash
 }
 
 // Taste clusters (4 options in 2x2 grid)
-export const TASTE_CLUSTERS = [
+import type { ImageSourcePropType } from "react-native";
+
+export interface TasteCluster {
+  id: string;
+  name: string;
+  characteristics: string;
+  image: ImageSourcePropType;
+}
+
+export const TASTE_CLUSTERS: TasteCluster[] = [
   {
     id: "comfort",
     name: "Chicken Pesto Pasta",
     characteristics: "Higher density, carb-inclusive, warm, familiar",
-    image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=400&h=400&fit=crop",
+    image: require("../../assets/taste-clusters/comfort.jpg"),
   },
   {
     id: "fresh",
     name: "Grilled Salmon Bowl",
     characteristics: "Lower density, vegetable-led, light preparations",
-    image: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&h=400&fit=crop",
+    image: require("../../assets/taste-clusters/fresh.jpg"),
   },
   {
     id: "simple",
     name: "Chicken + Sweet Potato",
     characteristics: "Minimal ingredients (≤5), common proteins",
-    image: "https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=400&h=400&fit=crop",
+    image: require("../../assets/taste-clusters/simple.jpg"),
   },
   {
     id: "adventurous",
     name: "Miso Chicken Wraps",
     characteristics: "Complex flavors, international, unusual ingredients",
-    image: "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=400&fit=crop",
+    image: require("../../assets/taste-clusters/adventurous.jpg"),
   },
 ];
 

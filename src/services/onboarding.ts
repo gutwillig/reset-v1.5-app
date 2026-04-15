@@ -20,11 +20,12 @@ const SECONDARY_BUCKET: Record<string, Record<string, MetabolicType>> = {
  */
 export async function syncOnboardingToBackend(params: {
   metabolicType?: MetabolicType;
+  goal?: string;
   quizAnswers: Record<string, string>;
   tastePreferences: string[];
   dietaryRestrictions: string[];
 }): Promise<void> {
-  const { metabolicType, quizAnswers, tastePreferences, dietaryRestrictions } = params;
+  const { metabolicType, goal, quizAnswers, tastePreferences, dietaryRestrictions } = params;
 
   const q1 = quizAnswers.q1 as string | undefined;
   const q2 = quizAnswers.q2 as string | undefined;
@@ -41,6 +42,7 @@ export async function syncOnboardingToBackend(params: {
     secondaryBucket: secondaryBucket ?? undefined,
     energyPattern: typeConfig?.signals.energy ?? undefined,
     cravingType: typeConfig?.internalBucket ?? undefined,
+    goal: goal ?? undefined,
     dietaryRestrictions,
     tasteCluster: tastePreferences[0] ?? undefined, // First selection is primary cluster
     quizAnswers,

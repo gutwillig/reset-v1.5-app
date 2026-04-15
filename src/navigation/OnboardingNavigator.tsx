@@ -1,6 +1,7 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {
+  GoalScreen,
   QuizScreen,
   CameraPermScreen,
   ScanScreen,
@@ -14,6 +15,7 @@ import {
 import { K } from "../constants/colors";
 
 export type OnboardingStackParamList = {
+  Goal: undefined;
   Quiz: undefined;
   CameraPerm: undefined;
   Scan: undefined;
@@ -36,6 +38,7 @@ export function OnboardingNavigator() {
         animation: "slide_from_right",
       }}
     >
+      <Stack.Screen name="Goal" component={GoalScreen} />
       <Stack.Screen name="Quiz" component={QuizScreen} />
       <Stack.Screen name="CameraPerm" component={CameraPermScreen} />
       <Stack.Screen

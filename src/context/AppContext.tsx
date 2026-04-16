@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from "react";
+import { AppState as RNAppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MetabolicType } from "../constants/colors";
 import { getTokens, clearTokens } from "../services/apiClient";
@@ -6,6 +7,7 @@ import { fetchMe, AuthUser } from "../services/auth";
 import { getProfile } from "../services/profile";
 import * as BrazeService from "../services/braze";
 import { requestPushPermission } from "../services/pushNotifications";
+import { notifyAppOpened } from "../services/notifications";
 
 // State types
 interface UserProfile {
@@ -223,6 +225,21 @@ export function AppProvider({ children }: AppProviderProps) {
       saveState(state);
     }
   }, [state]);
+
+  // Tell backend whenever the app opens / returns to foreground so it can
+  // cancel any pending re-engagement pushes (PRD §19.2 Action Paths).
+  useEffect(() => {
+    if (!state.auth.isAuthenticated) return;
+
+    notifyAppOpened();
+
+    const sub = RNAppState.addEventListener("change", (status) => {
+      if (status === "active") {
+        notifyAppOpened();
+      }
+    });
+    return () => sub.remove();
+  }, [state.auth.isAuthenticated]);
 
   async function loadState() {
     try {

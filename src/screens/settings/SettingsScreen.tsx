@@ -21,13 +21,12 @@ import * as BrazeService from "../../services/braze";
 
 const NOTIFICATION_PREFS_KEY = "notification_preferences";
 
-// Notification categories
+// Notification categories — PRD §19.3 forbids check-in reminder pushes, so
+// they are intentionally absent from this list.
 const NOTIFICATION_CATEGORIES = [
   { id: "meals", label: "Daily Meal Plan" },
-  { id: "checkin", label: "Check-in Reminders" },
   { id: "observations", label: "Ester Observations" },
   { id: "weekly", label: "Weekly Review" },
-  { id: "promos", label: "Tips & Updates" },
 ];
 
 export function SettingsScreen() {

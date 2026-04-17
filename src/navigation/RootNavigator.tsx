@@ -28,6 +28,7 @@ const linking: LinkingOptions<RootStackParamList> = {
               Home: "home",
             },
           },
+          WeeklyReview: "weekly-review",
         },
       },
     },

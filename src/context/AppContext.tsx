@@ -273,7 +273,7 @@ export function AppProvider({ children }: AppProviderProps) {
           if (!localHasOnboarding) {
             try {
               const profile = await getProfile();
-              if (profile.onboarding.onboardingComplete && profile.layer1.primaryBucket) {
+              if (profile.layer1.primaryBucket) {
                 dispatch({
                   type: "SET_METABOLIC_TYPE",
                   payload: profile.layer1.primaryBucket as MetabolicType,

@@ -62,6 +62,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         enableFirebaseCloudMessaging: false,
       },
     ],
+    "./plugins/withRegisterPush",
   ],
   extra: {
     shenAiApiKey: process.env.SHEN_AI_API_KEY ?? "",

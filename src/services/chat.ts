@@ -27,11 +27,13 @@ export async function sendMessage(
   chatSessionId?: string,
   systemContext?: string,
   assistantGreeting?: string,
+  mealId?: string,
 ): Promise<ChatMessage> {
   const body: Record<string, unknown> = { message };
   if (chatSessionId) body.chatSessionId = chatSessionId;
   if (systemContext) body.systemContext = systemContext;
   if (assistantGreeting) body.assistantGreeting = assistantGreeting;
+  if (mealId) body.mealId = mealId;
 
   return apiClient<ChatMessage>("/api/chat/send", {
     method: "POST",

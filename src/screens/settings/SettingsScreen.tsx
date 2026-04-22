@@ -18,6 +18,7 @@ import { Pill } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { logout } from "../../services/auth";
 import * as BrazeService from "../../services/braze";
+import { resetAppOpenFlowGate } from "../../utils/appOpenFlowGate";
 
 const NOTIFICATION_PREFS_KEY = "notification_preferences";
 
@@ -37,6 +38,8 @@ export function SettingsScreen() {
     setTastePreferences,
     clearAuth,
     resetState,
+    setHomeV2Enabled,
+    setAppOpenFlowEnabled,
   } = useApp();
 
   // Notification toggles — persisted via AsyncStorage
@@ -349,6 +352,72 @@ export function SettingsScreen() {
             <TouchableOpacity style={styles.linkRow}>
               <Text style={styles.linkText}>Contact Us</Text>
               <Text style={styles.linkArrow}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Experimental */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>EXPERIMENTAL</Text>
+          <View style={styles.card}>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>New home screen</Text>
+              <Switch
+                value={state.settings.homeV2Enabled}
+                onValueChange={setHomeV2Enabled}
+                trackColor={{ false: K.border, true: K.ochre }}
+                thumbColor={K.white}
+              />
+            </View>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>App-open flow</Text>
+              <Switch
+                value={state.settings.appOpenFlowEnabled}
+                onValueChange={setAppOpenFlowEnabled}
+                trackColor={{ false: K.border, true: K.ochre }}
+                thumbColor={K.white}
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.toggleRow}
+              onPress={async () => {
+                const userId = state.auth.authUser?.id;
+                if (!userId) return;
+                await resetAppOpenFlowGate(userId);
+                Alert.alert(
+                  "Reset",
+                  "App-open flow will show again on next foreground.",
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.toggleLabel}>Reset app-open flow (today)</Text>
+              <Text style={{ color: K.ochre, fontWeight: "600" }}>Reset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.toggleRow}
+              onPress={() => {
+                (navigation as any).navigate("AppOpenFlow", {
+                  screen: "DataGate",
+                  params: { debugForceShow: true },
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.toggleLabel}>Preview Quick scan screen</Text>
+              <Text style={{ color: K.ochre, fontWeight: "600" }}>Open</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.toggleRow}
+              onPress={() => {
+                (navigation as any).navigate("AppOpenFlow", {
+                  screen: "NextMeal",
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.toggleLabel}>Preview Next meal screen</Text>
+              <Text style={{ color: K.ochre, fontWeight: "600" }}>Open</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -299,6 +299,16 @@ export function ProfileScreen() {
           </View>
         )}
 
+        {/* Weekly Review Link */}
+        <TouchableOpacity
+          style={styles.settingsLink}
+          onPress={() => (navigation as any).navigate("WeeklyReview")}
+        >
+          <Text style={styles.settingsIcon}>📊</Text>
+          <Text style={styles.settingsText}>Weekly Review</Text>
+          <Text style={styles.settingsArrow}>→</Text>
+        </TouchableOpacity>
+
         {/* Saved Meals Link */}
         <TouchableOpacity
           style={styles.settingsLink}

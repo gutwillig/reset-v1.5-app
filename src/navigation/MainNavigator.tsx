@@ -1,7 +1,9 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { HomeScreen } from "../screens/home";
+import { HomeScreen, HomeScreenV2 } from "../screens/home";
+import { useApp } from "../context/AppContext";
+import { AppOpenNavigator } from "./AppOpenNavigator";
 import { ProfileScreen } from "../screens/profile";
 import { EsterChatScreen } from "../screens/chat";
 import { RecipeDetailScreen } from "../screens/recipe";
@@ -10,6 +12,7 @@ import { YapCallScreen } from "../screens/yap/YapCallScreen";
 import { ScanScreen } from "../screens/onboarding/ScanScreen";
 import { ScanResultsScreen } from "../screens/scan/ScanResultsScreen";
 import { SavedMealsScreen } from "../screens/favorites/SavedMealsScreen";
+import { WeeklyReviewScreen } from "../screens/review/WeeklyReviewScreen";
 import { TabBar } from "../components";
 import type { Meal } from "../components";
 
@@ -22,14 +25,16 @@ export type MainTabParamList = {
 // Stack navigator param list (wraps tabs + modals)
 export type MainStackParamList = {
   Tabs: undefined;
+  AppOpenFlow: undefined;
   EsterChat: {
-    context?: "general" | "meal";
+    context?: "general" | "meal" | "score";
     meal?: Meal;
   };
   RecipeDetail: {
     meal: Meal;
   };
   SavedMeals: undefined;
+  WeeklyReview: undefined;
   Settings: undefined;
   YapCall: {
     yapSessionId: string;
@@ -43,6 +48,11 @@ export type MainStackParamList = {
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
+function HomeRoute() {
+  const { state } = useApp();
+  return state.settings.homeV2Enabled ? <HomeScreenV2 /> : <HomeScreen />;
+}
+
 function TabNavigator() {
   return (
     <Tab.Navigator
@@ -53,7 +63,7 @@ function TabNavigator() {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={HomeRoute}
         options={{
           tabBarLabel: "Home",
         }}
@@ -78,6 +88,15 @@ export function MainNavigator() {
     >
       <Stack.Screen name="Tabs" component={TabNavigator} />
       <Stack.Screen
+        name="AppOpenFlow"
+        component={AppOpenNavigator}
+        options={{
+          presentation: "fullScreenModal",
+          animation: "fade",
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
         name="EsterChat"
         component={EsterChatScreen}
         options={{
@@ -96,6 +115,14 @@ export function MainNavigator() {
       <Stack.Screen
         name="SavedMeals"
         component={SavedMealsScreen}
+        options={{
+          presentation: "modal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="WeeklyReview"
+        component={WeeklyReviewScreen}
         options={{
           presentation: "modal",
           animation: "slide_from_bottom",

@@ -49,6 +49,7 @@ import type { CheckInEntry } from "../../services/checkIn";
 import { getProfile } from "../../services/profile";
 import type { UserProfile } from "../../services/profile";
 import { IngredientAversionPrompt } from "../../components/IngredientAversionPrompt";
+import { getLatestWeeklyReview, WeeklyReview } from "../../services/weeklyReview";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function HomeScreen() {
@@ -143,6 +144,12 @@ export function HomeScreen() {
 
     return generateGreeting(ctx);
   })();
+
+  // Weekly review banner — shows when a review is available
+  const [weeklyReview, setWeeklyReview] = useState<WeeklyReview | null>(null);
+  useEffect(() => {
+    getLatestWeeklyReview().then(setWeeklyReview).catch(() => {});
+  }, []);
 
   // UI State
   const scrollRef = useRef<ScrollView>(null);
@@ -526,6 +533,30 @@ export function HomeScreen() {
           )}
         </View>
 
+        {/* SLOT: Weekly Review banner — appears when a review is available */}
+        {weeklyReview && (
+          <TouchableOpacity
+            style={styles.reviewBanner}
+            onPress={() => navigation.navigate("WeeklyReview")}
+          >
+            <View style={styles.reviewBannerContent}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reviewBannerTitle}>Weekly Review Ready</Text>
+                <Text style={styles.reviewBannerSub}>
+                  Week of{" "}
+                  {new Date(weeklyReview.weekStartDate + "T00:00:00").toLocaleDateString(
+                    "en-US",
+                    { month: "short", day: "numeric" },
+                  )}
+                  {" · "}
+                  {weeklyReview.data.summary.checkInCount} check-ins
+                </Text>
+              </View>
+              <Text style={styles.reviewBannerArrow}>→</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* SLOT: Nudge (dismissible, collapses when dismissed) */}
         {nudge && (
           <View style={styles.nudgeSlot}>
@@ -781,6 +812,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm, // 12px gap to nudge
+  },
+  reviewBanner: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: K.blue,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  reviewBannerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  reviewBannerTitle: {
+    ...typography.bodyMedium,
+    color: K.brown,
+  },
+  reviewBannerSub: {
+    ...typography.bodySmall,
+    color: K.brown,
+    marginTop: 2,
+  },
+  reviewBannerArrow: {
+    fontSize: 20,
+    color: K.brown,
+    marginLeft: spacing.sm,
   },
   nudgeSlot: {
     paddingHorizontal: spacing.lg,

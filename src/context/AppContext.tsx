@@ -48,10 +48,16 @@ interface AuthState {
   authUser: AuthUser | null;
 }
 
+interface SettingsState {
+  homeV2Enabled: boolean;
+  appOpenFlowEnabled: boolean;
+}
+
 interface AppState {
   user: UserProfile;
   biometrics: BiometricData | null;
   auth: AuthState;
+  settings: SettingsState;
   isLoading: boolean;
 }
 
@@ -67,6 +73,8 @@ type AppAction =
   | { type: "SET_DIETARY_RESTRICTIONS"; payload: string[] }
   | { type: "SET_USER_ACCOUNT"; payload: { email: string; name?: string } }
   | { type: "SET_AUTH"; payload: AuthState }
+  | { type: "SET_HOME_V2_ENABLED"; payload: boolean }
+  | { type: "SET_APP_OPEN_FLOW_ENABLED"; payload: boolean }
   | { type: "COMPLETE_ONBOARDING" }
   | { type: "RESET_STATE" };
 
@@ -80,6 +88,7 @@ const initialState: AppState = {
   },
   biometrics: null,
   auth: { isAuthenticated: false, authUser: null },
+  settings: { homeV2Enabled: false, appOpenFlowEnabled: false },
   isLoading: true,
 };
 
@@ -97,6 +106,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         user: action.payload.user,
         biometrics: action.payload.biometrics,
+        settings: action.payload.settings ?? state.settings,
         isLoading: false,
       };
 
@@ -170,6 +180,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
         auth: action.payload,
       };
 
+    case "SET_HOME_V2_ENABLED":
+      return {
+        ...state,
+        settings: { ...state.settings, homeV2Enabled: action.payload },
+      };
+
+    case "SET_APP_OPEN_FLOW_ENABLED":
+      return {
+        ...state,
+        settings: { ...state.settings, appOpenFlowEnabled: action.payload },
+      };
+
     case "COMPLETE_ONBOARDING":
       return {
         ...state,
@@ -200,6 +222,8 @@ interface AppContextValue {
   setUserAccount: (email: string, name?: string) => void;
   setAuth: (user: AuthUser) => void;
   clearAuth: () => void;
+  setHomeV2Enabled: (enabled: boolean) => void;
+  setAppOpenFlowEnabled: (enabled: boolean) => void;
   completeOnboarding: () => void;
   resetState: () => void;
 }
@@ -273,7 +297,7 @@ export function AppProvider({ children }: AppProviderProps) {
           if (!localHasOnboarding) {
             try {
               const profile = await getProfile();
-              if (profile.onboarding.onboardingComplete && profile.layer1.primaryBucket) {
+              if (profile.layer1.primaryBucket) {
                 dispatch({
                   type: "SET_METABOLIC_TYPE",
                   payload: profile.layer1.primaryBucket as MetabolicType,
@@ -315,11 +339,11 @@ export function AppProvider({ children }: AppProviderProps) {
 
   async function saveState(stateToSave: AppState) {
     try {
-      // Only persist user profile and biometrics, not auth
-      const { user, biometrics } = stateToSave;
+      // Only persist user profile, biometrics, and settings — not auth
+      const { user, biometrics, settings } = stateToSave;
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ user, biometrics }),
+        JSON.stringify({ user, biometrics, settings }),
       );
     } catch (error) {
       console.error("Failed to save state:", error);
@@ -372,6 +396,14 @@ export function AppProvider({ children }: AppProviderProps) {
     });
   };
 
+  const setHomeV2Enabled = (enabled: boolean) => {
+    dispatch({ type: "SET_HOME_V2_ENABLED", payload: enabled });
+  };
+
+  const setAppOpenFlowEnabled = (enabled: boolean) => {
+    dispatch({ type: "SET_APP_OPEN_FLOW_ENABLED", payload: enabled });
+  };
+
   const completeOnboarding = () => {
     dispatch({ type: "COMPLETE_ONBOARDING" });
   };
@@ -394,6 +426,8 @@ export function AppProvider({ children }: AppProviderProps) {
     setUserAccount,
     setAuth,
     clearAuth,
+    setHomeV2Enabled,
+    setAppOpenFlowEnabled,
     completeOnboarding,
     resetState,
   };

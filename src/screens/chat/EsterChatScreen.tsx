@@ -31,7 +31,7 @@ const PENDING_NEW_CHAT_KEY = "@reset_pending_new_chat";
 
 type ChatRouteParams = {
   EsterChat: {
-    context?: "general" | "meal";
+    context?: "general" | "meal" | "score";
     meal?: Meal;
   };
 };
@@ -88,7 +88,10 @@ export function EsterChatScreen() {
 
   const defaultGreeting: Message = {
     id: "initial",
-    text: "I've been learning your patterns. Ask me anything.",
+    text:
+      context === "score"
+        ? "Your metabolic score blends a few signals — your scan, your check-ins, and how consistently I've seen them. Ask me which part is driving yours right now."
+        : "I've been learning your patterns. Ask me anything.",
     sender: "ester",
     timestamp: new Date(),
   };

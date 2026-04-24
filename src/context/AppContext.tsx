@@ -51,6 +51,7 @@ interface AuthState {
 interface SettingsState {
   homeV2Enabled: boolean;
   appOpenFlowEnabled: boolean;
+  useNewSurveyFlow: boolean;
 }
 
 interface AppState {
@@ -75,6 +76,7 @@ type AppAction =
   | { type: "SET_AUTH"; payload: AuthState }
   | { type: "SET_HOME_V2_ENABLED"; payload: boolean }
   | { type: "SET_APP_OPEN_FLOW_ENABLED"; payload: boolean }
+  | { type: "SET_USE_NEW_SURVEY_FLOW"; payload: boolean }
   | { type: "COMPLETE_ONBOARDING" }
   | { type: "RESET_STATE" };
 
@@ -88,7 +90,7 @@ const initialState: AppState = {
   },
   biometrics: null,
   auth: { isAuthenticated: false, authUser: null },
-  settings: { homeV2Enabled: false, appOpenFlowEnabled: false },
+  settings: { homeV2Enabled: false, appOpenFlowEnabled: false, useNewSurveyFlow: false },
   isLoading: true,
 };
 
@@ -191,6 +193,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         settings: { ...state.settings, appOpenFlowEnabled: action.payload },
       };
+    case "SET_USE_NEW_SURVEY_FLOW":
+      return {
+        ...state,
+        settings: { ...state.settings, useNewSurveyFlow: action.payload },
+      };
 
     case "COMPLETE_ONBOARDING":
       return {
@@ -224,6 +231,7 @@ interface AppContextValue {
   clearAuth: () => void;
   setHomeV2Enabled: (enabled: boolean) => void;
   setAppOpenFlowEnabled: (enabled: boolean) => void;
+  setUseNewSurveyFlow: (enabled: boolean) => void;
   completeOnboarding: () => void;
   resetState: () => void;
 }
@@ -404,6 +412,10 @@ export function AppProvider({ children }: AppProviderProps) {
     dispatch({ type: "SET_APP_OPEN_FLOW_ENABLED", payload: enabled });
   };
 
+  const setUseNewSurveyFlow = (enabled: boolean) => {
+    dispatch({ type: "SET_USE_NEW_SURVEY_FLOW", payload: enabled });
+  };
+
   const completeOnboarding = () => {
     dispatch({ type: "COMPLETE_ONBOARDING" });
   };
@@ -428,6 +440,7 @@ export function AppProvider({ children }: AppProviderProps) {
     clearAuth,
     setHomeV2Enabled,
     setAppOpenFlowEnabled,
+    setUseNewSurveyFlow,
     completeOnboarding,
     resetState,
   };

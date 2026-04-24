@@ -7,4 +7,5 @@ export { CheckInCard } from "./CheckInCard";
 export { PastEntryTiles } from "./PastEntryTiles";
 export { CheckInV2 } from "./CheckInV2";
 export { ScoreCard } from "./ScoreCard";
+export { ConfidenceCard } from "./ConfidenceCard";
 export { GreetingBlock } from "./GreetingBlock";

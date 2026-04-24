@@ -40,6 +40,7 @@ export function SettingsScreen() {
     resetState,
     setHomeV2Enabled,
     setAppOpenFlowEnabled,
+    setUseNewSurveyFlow,
   } = useApp();
 
   // Notification toggles — persisted via AsyncStorage
@@ -378,6 +379,15 @@ export function SettingsScreen() {
                 thumbColor={K.white}
               />
             </View>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>New survey flow (Figma)</Text>
+              <Switch
+                value={state.settings.useNewSurveyFlow}
+                onValueChange={setUseNewSurveyFlow}
+                trackColor={{ false: K.border, true: K.ochre }}
+                thumbColor={K.white}
+              />
+            </View>
             <TouchableOpacity
               style={styles.toggleRow}
               onPress={async () => {
@@ -417,6 +427,30 @@ export function SettingsScreen() {
               activeOpacity={0.7}
             >
               <Text style={styles.toggleLabel}>Preview Next meal screen</Text>
+              <Text style={{ color: K.ochre, fontWeight: "600" }}>Open</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.toggleRow}
+              onPress={() => {
+                (navigation as any).navigate("AppOpenFlow", {
+                  screen: "SurveyV2",
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.toggleLabel}>Preview Survey v2</Text>
+              <Text style={{ color: K.ochre, fontWeight: "600" }}>Open</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.toggleRow}
+              onPress={() => {
+                (navigation as any).navigate("AppOpenFlow", {
+                  screen: "ScoreReveal",
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.toggleLabel}>Preview Score reveal</Text>
               <Text style={{ color: K.ochre, fontWeight: "600" }}>Open</Text>
             </TouchableOpacity>
           </View>

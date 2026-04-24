@@ -1,6 +1,8 @@
+import "react-native-gesture-handler";
 import React from "react";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
 import {
@@ -35,18 +37,23 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AppProvider>
-        <ToastProvider>
-          <StatusBar style="dark" />
-          <RootNavigator />
-        </ToastProvider>
-      </AppProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <SafeAreaProvider>
+        <AppProvider>
+          <ToastProvider>
+            <StatusBar style="dark" />
+            <RootNavigator />
+          </ToastProvider>
+        </AppProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   loading: {
     flex: 1,
     justifyContent: "center",

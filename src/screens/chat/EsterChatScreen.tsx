@@ -183,11 +183,10 @@ export function EsterChatScreen() {
     setError(null);
 
     try {
-      // Pass meal context as system-level context (not embedded in user message)
+      // Meal context: pass the ID every turn so the backend can fetch full
+      // nutrition/ingredients and inject structured context into the system
+      // prompt. The one-off greeting is only persisted for brand-new sessions.
       const isNewMealChat = meal && !chatSessionId;
-      const systemContext = isNewMealChat
-        ? `[Context: User is asking about their meal "${meal.name}" - ${meal.calories} cal, ${meal.protein}g protein. Why line: ${meal.whyLine}]`
-        : undefined;
       const assistantGreeting = isNewMealChat
         ? `Let's talk about ${meal.name}. What would you like to know — why I picked it, what you could swap, or something else?`
         : undefined;
@@ -195,8 +194,9 @@ export function EsterChatScreen() {
       const response = await sendChatMessage(
         messageText,
         chatSessionId,
-        systemContext,
+        undefined,
         assistantGreeting,
+        meal?.id,
       );
 
       // Track the session for follow-up messages

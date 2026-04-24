@@ -427,7 +427,9 @@ function getRecentCheckInGreeting(ctx: GreetingContext): GreetingResult {
     };
     return {
       nameGreeting,
-      message: stressMessages[tag] || `Stress from ${tag} — today's meals are adjusted to help your body recover.`,
+      message:
+        stressMessages[tag] ||
+        "Today's meals are adjusted to help your body recover.",
     };
   }
 

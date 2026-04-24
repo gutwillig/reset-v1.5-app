@@ -25,6 +25,7 @@ import type {
   GreetingResult,
 } from "../../services/greetings";
 import { getProfile, type UserProfile } from "../../services/profile";
+import { getResetScore, type ResetScore } from "../../services/resetScore";
 import { getCheckInHistory, type CheckInEntry } from "../../services/checkIn";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import { useAppPalette } from "../../hooks/useAppPalette";
@@ -41,14 +42,17 @@ export function AppOpenGreetingScreen() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [checkInHistory, setCheckInHistory] = useState<CheckInEntry[]>([]);
+  const [resetScore, setResetScore] = useState<ResetScore | null>(null);
 
   useEffect(() => {
     Promise.all([
       getProfile().catch(() => null),
       getCheckInHistory(30).catch(() => []),
-    ]).then(([prof, history]) => {
+      getResetScore().catch(() => null),
+    ]).then(([prof, history, rs]) => {
       setProfile(prof);
       setCheckInHistory(history);
+      if (rs && rs.status === "active" && rs.score) setResetScore(rs.score);
     });
   }, []);
 
@@ -110,7 +114,8 @@ export function AppOpenGreetingScreen() {
     ? require("../../../assets/images/mascot-shape-bone.png")
     : require("../../../assets/images/mascot-shape-ochre.png");
 
-  const score = profile?.confidence?.composite ?? null;
+  const score = resetScore?.score ?? null;
+  const confidence = profile?.confidence?.composite ?? null;
   const hasScore = score !== null && score > 0;
   const typeLabel =
     toMetabolicType(profile?.layer1?.primaryBucket) ?? metabolicType;
@@ -119,8 +124,8 @@ export function AppOpenGreetingScreen() {
   const { isFresh } = useBiometricFreshness(latestScanAt, latestCheckInAt);
   const showScore = hasScore && isFresh;
   const daysToFullConfidence =
-    score !== null && score < 100
-      ? Math.max(1, Math.ceil(100 - score))
+    confidence !== null && confidence < 100
+      ? Math.max(1, Math.ceil(100 - confidence))
       : 0;
 
   return (
@@ -183,14 +188,14 @@ export function AppOpenGreetingScreen() {
                       style={[
                         styles.confidenceFill,
                         {
-                          width: `${Math.max(4, Math.round(score!))}%`,
+                          width: `${Math.max(4, Math.round(confidence ?? 0))}%`,
                           backgroundColor: K.ochre,
                         },
                       ]}
                     />
                   </View>
                   <Text style={[styles.confidenceValue, { color: textColor }]}>
-                    {Math.round(score!)}%
+                    {Math.round(confidence ?? 0)}%
                   </Text>
                 </View>
                 {daysToFullConfidence > 0 ? (
@@ -253,10 +258,10 @@ const styles = StyleSheet.create({
   },
   mascotWrap: {
     position: "absolute",
-    top: -60,
-    left: -80,
-    width: 360,
-    height: 360,
+    top: -50,
+    left: -70,
+    width: 320,
+    height: 320,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -268,11 +273,12 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "-155.06deg" }, { scaleY: -1 }],
   },
   contentColumn: {
-    position: "absolute",
-    left: spacing.lg,
-    right: spacing.lg,
-    bottom: 120,
+    flex: 1,
+    paddingTop: 280,
+    paddingBottom: 120,
+    paddingHorizontal: spacing.lg,
     gap: spacing.lg,
+    justifyContent: "flex-end",
   },
   textBlock: {
     gap: spacing.sm,
@@ -374,15 +380,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   arrowButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   arrowIcon: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: "400",
   },
 });

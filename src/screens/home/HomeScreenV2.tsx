@@ -22,6 +22,7 @@ import {
 } from "../../services/checkIn";
 import type { CheckInEntry } from "../../services/checkIn";
 import { getProfile, type UserProfile } from "../../services/profile";
+import { getResetScore, type ResetScore } from "../../services/resetScore";
 import {
   generateGreeting,
   generateSimpleGreeting,
@@ -43,6 +44,7 @@ import {
   PastEntryTiles,
   CheckInV2,
   ScoreCard,
+  ConfidenceCard,
   GreetingBlock,
 } from "../../components/homeV2";
 import type { Meal } from "../../components";
@@ -59,6 +61,7 @@ export function HomeScreenV2() {
   const [checkedInToday, setCheckedInToday] = useState(false);
   const [showCheckInForm, setShowCheckInForm] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [resetScore, setResetScore] = useState<ResetScore | null>(null);
 
   useEffect(() => {
     getDailyPlan()
@@ -87,6 +90,12 @@ export function HomeScreenV2() {
 
     getProfile()
       .then(setProfile)
+      .catch(() => {});
+
+    getResetScore()
+      .then((res) => {
+        if (res.status === "active" && res.score) setResetScore(res.score);
+      })
       .catch(() => {});
   }, []);
 
@@ -129,9 +138,13 @@ export function HomeScreenV2() {
     [navigation],
   );
 
-  const handleScoreLearnMore = useCallback(() => {
-    navigation.navigate("EsterChat", { context: "score" });
+  const handleScanAgain = useCallback(() => {
+    navigation.navigate("Scan", { mode: "rescan" });
   }, [navigation]);
+
+  const handleSeeInsights = useCallback(() => {
+    // Destination TBD — design calls for an insights surface we haven't built.
+  }, []);
 
   const userName =
     state.auth.authUser?.firstName || state.user.name || undefined;
@@ -187,13 +200,17 @@ export function HomeScreenV2() {
     return generateGreeting(ctx);
   })();
 
-  const score = profile?.confidence?.composite ?? null;
-  const typeLabel =
-    toMetabolicType(profile?.layer1?.primaryBucket) ?? metabolicType;
+  const score = resetScore?.score ?? null;
+  const confidence = profile?.confidence?.composite ?? null;
   const daysToFullConfidence =
-    score !== null && score < 100
-      ? Math.max(1, Math.ceil(100 - score))
+    confidence !== null && confidence < 100
+      ? Math.max(1, Math.ceil(100 - confidence))
       : 0;
+  const latestScanAt = profile?.layer3?.latestScan?.scannedAt ?? null;
+  const trendDelta =
+    resetScore && resetScore.previousDayScore !== null
+      ? Math.round(resetScore.score - resetScore.previousDayScore)
+      : null;
 
   const handleFavoriteToggle = useCallback(async (mealId: string) => {
     const wasFavorited = favoritedMeals.has(mealId);
@@ -237,10 +254,13 @@ export function HomeScreenV2() {
 
         <ScoreCard
           score={score}
-          typeLabel={typeLabel}
-          daysToFullConfidence={daysToFullConfidence}
-          onLearnMore={handleScoreLearnMore}
+          latestScanAt={latestScanAt}
+          trendDelta={trendDelta}
+          onScanAgain={handleScanAgain}
+          onSeeInsights={handleSeeInsights}
         />
+
+        <ConfidenceCard confidence={confidence} daysToFull={daysToFullConfidence} />
 
         {showCheckInForm ? (
           <CheckInV2

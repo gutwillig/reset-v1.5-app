@@ -17,6 +17,7 @@ import { getProfile } from "../../services/profile";
 import { getCheckInHistory } from "../../services/checkIn";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import { useAppPalette } from "../../hooks/useAppPalette";
+import { useApp } from "../../context/AppContext";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 
 export function DataGateScreen() {
@@ -27,6 +28,7 @@ export function DataGateScreen() {
   const insets = useSafeAreaInsets();
   const { outerBg, innerBg, nestedBg, textColor, subtleText, borderColor, statusBarStyle } =
     useAppPalette();
+  const { state: appState } = useApp();
 
   const [lastScanAt, setLastScanAt] = useState<string | null>(null);
   const [lastCheckInAt, setLastCheckInAt] = useState<string | null>(null);
@@ -72,7 +74,9 @@ export function DataGateScreen() {
   };
 
   const handleSurvey = () => {
-    navigation.replace("Survey");
+    navigation.replace(
+      appState.settings.useNewSurveyFlow ? "SurveyV2" : "Survey",
+    );
   };
 
   const handleSkipToMeals = () => {

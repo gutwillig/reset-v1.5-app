@@ -47,7 +47,8 @@ export function CheckInCard({ onPress, onSkip, onRemind }: CheckInCardProps) {
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: spacing.lg,
-    marginVertical: spacing.md,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
     padding: spacing.md,
     borderRadius: 4,
     gap: spacing.xl,

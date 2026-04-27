@@ -16,7 +16,6 @@ import {
 } from "../../services/meals";
 import type { DailyPlan } from "../../services/meals";
 import {
-  submitCheckIn,
   getTodayCheckIn,
   getCheckInHistory,
 } from "../../services/checkIn";
@@ -38,11 +37,8 @@ import { useApp } from "../../context/AppContext";
 import { useAppPalette } from "../../hooks/useAppPalette";
 import {
   MealTabsSection,
-  MealPlanPromoCard,
   HomeHeader,
   CheckInCard,
-  PastEntryTiles,
-  CheckInV2,
   ScoreCard,
   ConfidenceCard,
   GreetingBlock,
@@ -59,7 +55,6 @@ export function HomeScreenV2() {
   const [favoritedMeals, setFavoritedMeals] = useState<Set<string>>(new Set());
   const [checkInHistory, setCheckInHistory] = useState<CheckInEntry[]>([]);
   const [checkedInToday, setCheckedInToday] = useState(false);
-  const [showCheckInForm, setShowCheckInForm] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [resetScore, setResetScore] = useState<ResetScore | null>(null);
 
@@ -99,31 +94,6 @@ export function HomeScreenV2() {
       .catch(() => {});
   }, []);
 
-  const handleCheckInComplete = useCallback(
-    async (data: {
-      energy: string | null;
-      stress: string | null;
-      sleepHours: number | null;
-      sleepQuality: string | null;
-    }): Promise<string | undefined> => {
-      try {
-        const result = await submitCheckIn({
-          energy: data.energy ?? "okay",
-          stressTags: data.stress ? [data.stress] : [],
-          sleepHours: data.sleepHours ?? undefined,
-          sleepQuality: data.sleepQuality ?? undefined,
-        });
-        setCheckedInToday(true);
-        const history = await getCheckInHistory(30).catch(() => []);
-        setCheckInHistory(history);
-        return result.esterResponse;
-      } catch {
-        return undefined;
-      }
-    },
-    [],
-  );
-
   const handleMealPress = useCallback(
     (meal: Meal) => {
       navigation.navigate("RecipeDetail", { meal });
@@ -142,9 +112,9 @@ export function HomeScreenV2() {
     navigation.navigate("Scan", { mode: "rescan" });
   }, [navigation]);
 
-  const handleSeeInsights = useCallback(() => {
-    // Destination TBD — design calls for an insights surface we haven't built.
-  }, []);
+  const handleStartCheckIn = useCallback(() => {
+    (navigation as any).navigate("AppOpenFlow", { screen: "SurveyV2" });
+  }, [navigation]);
 
   const userName =
     state.auth.authUser?.firstName || state.user.name || undefined;
@@ -257,23 +227,9 @@ export function HomeScreenV2() {
           latestScanAt={latestScanAt}
           trendDelta={trendDelta}
           onScanAgain={handleScanAgain}
-          onSeeInsights={handleSeeInsights}
         />
 
         <ConfidenceCard confidence={confidence} daysToFull={daysToFullConfidence} />
-
-        {showCheckInForm ? (
-          <CheckInV2
-            onComplete={handleCheckInComplete}
-            onDismiss={() => setShowCheckInForm(false)}
-          />
-        ) : !checkedInToday ? (
-          <CheckInCard onPress={() => setShowCheckInForm(true)} />
-        ) : null}
-
-        <PastEntryTiles entries={checkInHistory.slice(0, 2)} />
-
-        <MealPlanPromoCard />
 
         <Text style={[styles.sectionHeading, { color: textColor }]}>Recipes for you</Text>
 
@@ -286,6 +242,10 @@ export function HomeScreenV2() {
           onFavoriteToggle={handleFavoriteToggle}
           onDeepRead={handleDeepRead}
         />
+
+        {!checkedInToday ? (
+          <CheckInCard onPress={handleStartCheckIn} />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -323,6 +283,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     letterSpacing: -0.32,
     paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
     marginBottom: spacing.md,
   },
   checkInSlot: {

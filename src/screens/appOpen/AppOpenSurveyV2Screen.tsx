@@ -30,6 +30,13 @@ const STRESS_OPTIONS: MultipleChoiceOption[] = [
   { id: "none", label: "None" },
 ];
 
+const SLEEP_QUALITY_OPTIONS: MultipleChoiceOption[] = [
+  { id: "poor", label: "Poor" },
+  { id: "okay", label: "Okay" },
+  { id: "good", label: "Good" },
+  { id: "great", label: "Great" },
+];
+
 function sliderToEnergy(value: number): "low" | "okay" | "steady" | "high" {
   if (value < 25) return "low";
   if (value < 55) return "okay";
@@ -46,6 +53,7 @@ export function AppOpenSurveyV2Screen() {
   const [feeling, setFeeling] = useState(50);
   const [stress, setStress] = useState<string | null>(null);
   const [sleepHours, setSleepHours] = useState(7);
+  const [sleepQuality, setSleepQuality] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const exitToHome = () => {
@@ -64,7 +72,7 @@ export function AppOpenSurveyV2Screen() {
   };
 
   const handleContinue = async () => {
-    if (step < 3) {
+    if (step < 4) {
       setStep((s) => s + 1);
       return;
     }
@@ -76,6 +84,7 @@ export function AppOpenSurveyV2Screen() {
         energy: sliderToEnergy(feeling),
         stressTags,
         sleepHours,
+        sleepQuality: sleepQuality ?? undefined,
       });
       // Survey is fresh signal — rotate today's recipes so the user sees a
       // change when they land back on Home (RES-112). Fire-and-forget; we
@@ -95,13 +104,15 @@ export function AppOpenSurveyV2Screen() {
     if (step === 1) return true;
     if (step === 2) return stress !== null;
     if (step === 3) return sleepHours >= 1 && sleepHours <= 14;
+    if (step === 4) return sleepQuality !== null;
     return false;
   })();
 
   const title = (() => {
     if (step === 1) return "How's your energy today?";
     if (step === 2) return "Any stress sources today?";
-    return "How many hours of sleep did you get last night?";
+    if (step === 3) return "How many hours of sleep did you get last night?";
+    return "How was the quality of your sleep?";
   })();
 
   const renderBody = () => {
@@ -114,13 +125,21 @@ export function AppOpenSurveyV2Screen() {
           onSelect={setStress}
         />
       );
+    if (step === 3)
+      return (
+        <NumberStepper
+          value={sleepHours}
+          min={1}
+          max={14}
+          unitLabel="hours"
+          onChange={setSleepHours}
+        />
+      );
     return (
-      <NumberStepper
-        value={sleepHours}
-        min={1}
-        max={14}
-        unitLabel="hours"
-        onChange={setSleepHours}
+      <MultipleChoiceList
+        options={SLEEP_QUALITY_OPTIONS}
+        selectedId={sleepQuality}
+        onSelect={setSleepQuality}
       />
     );
   };
@@ -135,7 +154,7 @@ export function AppOpenSurveyV2Screen() {
       >
         <SurveyHeader
           step={step}
-          totalSteps={3}
+          totalSteps={4}
           title={title}
           canGoBack={step > 1}
           onBack={handleBack}

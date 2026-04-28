@@ -11,8 +11,11 @@ export interface AppPalette {
   statusBarStyle: "light-content" | "dark-content";
 }
 
+// Evening palette runs from 4p through 6a so post-midnight launches still
+// render the night styling instead of flipping back to day.
 function isEvening(): boolean {
-  return new Date().getHours() >= 16;
+  const hour = new Date().getHours();
+  return hour >= 16 || hour < 6;
 }
 
 export function useAppPalette(): AppPalette {

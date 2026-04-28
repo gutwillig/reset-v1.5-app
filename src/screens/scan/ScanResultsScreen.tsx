@@ -6,6 +6,7 @@ import { K } from "../../constants/colors";
 import { typography } from "../../constants/typography";
 import { Avatar, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { refreshDailyPlan, cacheDailyPlan } from "../../services/meals";
 import type { MainStackParamList } from "../../navigation/MainNavigator";
 
 type Props = NativeStackScreenProps<MainStackParamList, "ScanResults">;
@@ -60,6 +61,15 @@ function BiometricRow({ icon, label, value, delay }: BiometricRowProps) {
 export function ScanResultsScreen({ navigation }: Props) {
   const { state } = useApp();
   const biometrics = state.biometrics;
+
+  // Fresh scan should rotate today's recipes (RES-112). Fire-and-forget so
+  // the user is back on Home with the updated plan cached the moment they
+  // tap Done.
+  useEffect(() => {
+    refreshDailyPlan()
+      .then((plan) => cacheDailyPlan(plan))
+      .catch(() => {});
+  }, []);
 
   if (!biometrics) {
     return (

@@ -11,6 +11,7 @@ import { useNavigation, CommonActions } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { K } from "../../constants/colors";
 import { submitCheckIn } from "../../services/checkIn";
+import { refreshDailyPlan, cacheDailyPlan } from "../../services/meals";
 import { SurveyHeader } from "../../components/survey/SurveyHeader";
 import { ContinueButton } from "../../components/survey/ContinueButton";
 import { FeelingSlider } from "../../components/survey/FeelingSlider";
@@ -76,6 +77,12 @@ export function AppOpenSurveyV2Screen() {
         stressTags,
         sleepHours,
       });
+      // Survey is fresh signal — rotate today's recipes so the user sees a
+      // change when they land back on Home (RES-112). Fire-and-forget; we
+      // don't want to block navigation on a meal-engine call.
+      refreshDailyPlan()
+        .then((plan) => cacheDailyPlan(plan))
+        .catch(() => {});
     } catch {
       // Non-blocking: proceed to EncourageScan regardless so the flow completes.
     } finally {

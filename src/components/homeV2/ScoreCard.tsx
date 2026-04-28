@@ -16,7 +16,6 @@ interface ScoreCardProps {
   latestScanAt: string | null;
   trendDelta?: number | null;
   onScanAgain: () => void;
-  onSeeInsights: () => void;
 }
 
 const RING_MAX_WIDTH = 320;
@@ -67,7 +66,6 @@ export function ScoreCard({
   latestScanAt,
   trendDelta = null,
   onScanAgain,
-  onSeeInsights,
 }: ScoreCardProps) {
   const { nestedBg, textColor, subtleText, evening } = useAppPalette();
   const { width: windowWidth } = useWindowDimensions();
@@ -78,7 +76,6 @@ export function ScoreCard({
     Math.max(200, windowWidth - CARD_HORIZONTAL_CHROME),
   );
   const accent = evening ? "#B8D0D6" : K.brown;
-  const ghostBg = evening ? "rgba(250,253,254,0.16)" : "rgba(54,20,22,0.08)";
 
   return (
     <View style={[styles.card, { backgroundColor: nestedBg }]}>
@@ -118,15 +115,6 @@ export function ScoreCard({
           activeOpacity={0.85}
         >
           <Text style={[styles.btnPrimaryText]}>Scan Again</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.btn, { backgroundColor: ghostBg }]}
-          onPress={onSeeInsights}
-          activeOpacity={0.85}
-        >
-          <Text style={[styles.btnGhostText, { color: textColor }]}>
-            See Insights
-          </Text>
         </TouchableOpacity>
       </View>
 
@@ -207,10 +195,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.dmSansBold,
     fontSize: 14,
     color: K.brown,
-  },
-  btnGhostText: {
-    fontFamily: fonts.dmSansBold,
-    fontSize: 14,
   },
   timestamp: {
     fontFamily: fonts.dmSans,

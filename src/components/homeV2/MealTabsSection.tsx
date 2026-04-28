@@ -10,6 +10,16 @@ type Slot = "Breakfast" | "Lunch" | "Dinner";
 
 const SLOTS: Slot[] = ["Breakfast", "Lunch", "Dinner"];
 
+// Bands per RES-111 product spec. Late-night (9p–4a) wraps to breakfast so
+// users opening at 11pm see tomorrow's breakfast picks rather than dinner.
+function defaultSlotForTime(date: Date = new Date()): Slot {
+  const minutes = date.getHours() * 60 + date.getMinutes();
+  if (minutes >= 240 && minutes < 630) return "Breakfast"; // 4:00a – 10:30a
+  if (minutes >= 630 && minutes < 900) return "Lunch"; // 10:30a – 3:00p
+  if (minutes >= 900 && minutes < 1260) return "Dinner"; // 3:00p – 9:00p
+  return "Breakfast"; // 9:00p – 4:00a
+}
+
 interface MealTabsSectionProps {
   breakfast: Meal[];
   lunch: Meal[];
@@ -29,7 +39,7 @@ export function MealTabsSection({
   onFavoriteToggle,
   onDeepRead,
 }: MealTabsSectionProps) {
-  const [selected, setSelected] = useState<Slot>("Breakfast");
+  const [selected, setSelected] = useState<Slot>(() => defaultSlotForTime());
   const { textColor, borderColor } = useAppPalette();
 
   const meals =

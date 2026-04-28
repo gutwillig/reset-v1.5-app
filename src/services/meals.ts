@@ -84,6 +84,8 @@ export interface SignalAdjustments {
   stress: boolean;
   sleep: boolean;
   energy: boolean;
+  recentlyScanned: boolean;
+  recentlySurveyed: boolean;
 }
 
 export interface DailyPlan {

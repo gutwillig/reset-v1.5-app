@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "../../navigation/MainNavigator";
 import { K, toMetabolicType } from "../../constants/colors";
@@ -58,41 +58,45 @@ export function HomeScreenV2() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [resetScore, setResetScore] = useState<ResetScore | null>(null);
 
-  useEffect(() => {
-    getDailyPlan()
-      .then((plan) => {
-        setDailyPlan(plan);
-        cacheDailyPlan(plan);
-      })
-      .catch(async () => {
-        const cached = await getCachedDailyPlan();
-        if (cached) setDailyPlan(cached);
-      });
+  // Re-fetch every time Home regains focus so a fresh scan or survey
+  // (which calls refreshDailyPlan() on the way back) shows up immediately.
+  useFocusEffect(
+    useCallback(() => {
+      getDailyPlan()
+        .then((plan) => {
+          setDailyPlan(plan);
+          cacheDailyPlan(plan);
+        })
+        .catch(async () => {
+          const cached = await getCachedDailyPlan();
+          if (cached) setDailyPlan(cached);
+        });
 
-    getFavorites()
-      .then((favs) => setFavoritedMeals(new Set(favs.map((f) => f.id))))
-      .catch(() => {});
+      getFavorites()
+        .then((favs) => setFavoritedMeals(new Set(favs.map((f) => f.id))))
+        .catch(() => {});
 
-    getCheckInHistory(30)
-      .then((history) => setCheckInHistory(history))
-      .catch(() => {});
+      getCheckInHistory(30)
+        .then((history) => setCheckInHistory(history))
+        .catch(() => {});
 
-    getTodayCheckIn()
-      .then((res) => {
-        if (res.checkIn) setCheckedInToday(true);
-      })
-      .catch(() => {});
+      getTodayCheckIn()
+        .then((res) => {
+          setCheckedInToday(!!res.checkIn);
+        })
+        .catch(() => {});
 
-    getProfile()
-      .then(setProfile)
-      .catch(() => {});
+      getProfile()
+        .then(setProfile)
+        .catch(() => {});
 
-    getResetScore()
-      .then((res) => {
-        if (res.status === "active" && res.score) setResetScore(res.score);
-      })
-      .catch(() => {});
-  }, []);
+      getResetScore()
+        .then((res) => {
+          if (res.status === "active" && res.score) setResetScore(res.score);
+        })
+        .catch(() => {});
+    }, []),
+  );
 
   const handleMealPress = useCallback(
     (meal: Meal) => {

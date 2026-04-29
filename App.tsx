@@ -18,6 +18,7 @@ import { AppProvider } from "./src/context/AppContext";
 import { ToastProvider } from "./src/context/ToastContext";
 import { RootNavigator } from "./src/navigation";
 import { K } from "./src/constants/colors";
+import { PaletteProvider } from "./src/hooks/useAppPalette";
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -40,10 +41,12 @@ export default function App() {
     <GestureHandlerRootView style={styles.gestureRoot}>
       <SafeAreaProvider>
         <AppProvider>
-          <ToastProvider>
-            <StatusBar style="dark" />
-            <RootNavigator />
-          </ToastProvider>
+          <PaletteProvider>
+            <ToastProvider>
+              <StatusBar style="dark" />
+              <RootNavigator />
+            </ToastProvider>
+          </PaletteProvider>
         </AppProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

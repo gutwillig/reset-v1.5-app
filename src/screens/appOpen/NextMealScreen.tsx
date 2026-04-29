@@ -21,6 +21,7 @@ import {
   type DailyPlanMeal,
 } from "../../services/meals";
 import { useAppPalette } from "../../hooks/useAppPalette";
+import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 
 const STAR_FILLED = "★";
@@ -158,8 +159,16 @@ export function NextMealScreen() {
   const loading = plan === null && meal === null;
   const prepMeta = meal ? formatPrep(meal) : "";
 
+  const swipeHandlers = useSwipeToAdvance({
+    axis: "down",
+    onAdvance: exitToHome,
+  });
+
   return (
-    <View style={[styles.root, { backgroundColor: outerBg }]}>
+    <View
+      style={[styles.root, { backgroundColor: outerBg }]}
+      {...swipeHandlers}
+    >
       <StatusBar barStyle={statusBarStyle} translucent />
       <View
         style={[

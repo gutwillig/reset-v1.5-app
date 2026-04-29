@@ -8,6 +8,7 @@ import { fonts } from "../../constants/typography";
 import { SurveyHeader } from "../../components/survey/SurveyHeader";
 import { ContinueButton } from "../../components/survey/ContinueButton";
 import { getProfile } from "../../services/profile";
+import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 
 export function EncourageScanScreen() {
@@ -38,6 +39,11 @@ export function EncourageScanScreen() {
     navigation.replace("ScoreReveal");
   };
 
+  const swipeHandlers = useSwipeToAdvance({
+    axis: "horizontal",
+    onAdvance: handleSkip,
+  });
+
   const confidencePct =
     confidence !== null ? Math.max(0, Math.min(100, Math.round(confidence))) : 50;
   const daysToFull =
@@ -46,7 +52,11 @@ export function EncourageScanScreen() {
       : 0;
 
   return (
-    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={styles.root}
+      edges={["top", "bottom"]}
+      {...swipeHandlers}
+    >
       <StatusBar barStyle="dark-content" translucent />
 
       <View style={styles.content}>

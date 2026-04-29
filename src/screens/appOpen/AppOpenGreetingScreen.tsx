@@ -29,6 +29,7 @@ import { getResetScore, type ResetScore } from "../../services/resetScore";
 import { getCheckInHistory, type CheckInEntry } from "../../services/checkIn";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import { useAppPalette } from "../../hooks/useAppPalette";
+import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 
 export function AppOpenGreetingScreen() {
@@ -128,8 +129,16 @@ export function AppOpenGreetingScreen() {
       ? Math.max(1, Math.ceil(100 - confidence))
       : 0;
 
+  const swipeHandlers = useSwipeToAdvance({
+    axis: "horizontal",
+    onAdvance: () => navigation.navigate("DataGate"),
+  });
+
   return (
-    <View style={[styles.root, { backgroundColor: outerBg }]}>
+    <View
+      style={[styles.root, { backgroundColor: outerBg }]}
+      {...swipeHandlers}
+    >
       <StatusBar barStyle={statusBarStyle} translucent />
       <View
         style={[

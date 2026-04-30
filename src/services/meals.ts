@@ -148,6 +148,13 @@ export async function toggleMealEaten(
 
 // --- Meal Detail API ---
 
+export interface MealNutrient {
+  name: string;
+  amount: number;
+  unit: string;
+  percentOfDailyNeeds?: number;
+}
+
 export interface MealDetail {
   id: string;
   name: string;
@@ -163,6 +170,8 @@ export interface MealDetail {
   fatGrams: number | null;
   carbsGrams: number | null;
   fiberGrams: number | null;
+  nutrientsJson: MealNutrient[] | null;
+  diets?: { id: string; name: string }[];
 }
 
 export interface MealIngredient {

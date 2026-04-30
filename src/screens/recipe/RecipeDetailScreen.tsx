@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,72 +7,196 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  useNavigation,
+  useRoute,
+  RouteProp,
+  CommonActions,
+} from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import Svg, { Defs, LinearGradient, Rect, Stop, Circle } from "react-native-svg";
 import { K } from "../../constants/colors";
-import { typography, spacing, radius } from "../../constants/typography";
+import { fonts } from "../../constants/typography";
 import type { Meal } from "../../components";
 import {
   getMealDetail,
   getMealIngredients,
+  getCachedDailyPlan,
   MealDetail,
   MealIngredient,
+  MealNutrient,
+  DailyPlanMeal,
 } from "../../services/meals";
+import type { MainStackParamList } from "../../navigation/MainNavigator";
 
 type RecipeRouteParams = {
   RecipeDetail: {
     meal: Meal;
+    siblings?: Meal[];
   };
 };
 
+const HERO_HEIGHT = 360;
+const SCREEN_WIDTH = Dimensions.get("window").width;
+
+// Spoonacular nutrient names that are *macros* (and thus excluded from the
+// vitamins-and-minerals %DV rollup).
+const MACRO_NAMES = new Set([
+  "Calories",
+  "Fat",
+  "Saturated Fat",
+  "Trans Fat",
+  "Mono Unsaturated Fat",
+  "Poly Unsaturated Fat",
+  "Carbohydrates",
+  "Net Carbohydrates",
+  "Sugar",
+  "Cholesterol",
+  "Protein",
+  "Fiber",
+  "Alcohol",
+  "Caffeine",
+]);
+
+function computeMicrosPctRollup(nutrients: MealNutrient[] | null): number | null {
+  if (!nutrients || nutrients.length === 0) return null;
+  const micros = nutrients.filter(
+    (n) =>
+      !MACRO_NAMES.has(n.name) &&
+      typeof n.percentOfDailyNeeds === "number" &&
+      n.percentOfDailyNeeds > 0,
+  );
+  if (micros.length === 0) return null;
+  const sum = micros.reduce(
+    (acc, n) => acc + Math.min(100, n.percentOfDailyNeeds!),
+    0,
+  );
+  return Math.round(sum / micros.length);
+}
+
 function parseInstructions(instructions: string | null): string[] {
   if (!instructions) return [];
-  // Try numbered steps first (e.g., "1. Do this\n2. Do that")
   const numbered = instructions.match(/\d+\.\s+[^\n]+/g);
   if (numbered && numbered.length > 1) {
     return numbered.map((s) => s.replace(/^\d+\.\s*/, "").trim());
   }
-  // Fall back to splitting by sentences
   return instructions
     .split(/\.(?:\s|$)/)
     .map((s) => s.trim())
     .filter((s) => s.length > 10);
 }
 
+const STEP_LABELS = [
+  "STEP ONE",
+  "STEP TWO",
+  "STEP THREE",
+  "STEP FOUR",
+  "STEP FIVE",
+  "STEP SIX",
+  "STEP SEVEN",
+  "STEP EIGHT",
+  "STEP NINE",
+  "STEP TEN",
+];
+
+function dailyPlanMealToMeal(d: DailyPlanMeal): Meal {
+  return {
+    id: d.id,
+    name: d.name,
+    whyLine: d.whyLine,
+    calories: d.calories,
+    protein: d.protein,
+    prepTime: d.prepTime,
+    time: d.time,
+    imageUrl: d.imageUrl,
+    iliScore: d.iliScore,
+    inflammatoryIndex: d.inflammatoryIndex,
+    foodQuality: d.foodQuality,
+    primaryProtein: d.primaryProtein,
+    cuisineCluster: d.cuisineCluster,
+  };
+}
+
+function capitalizeSlot(time: Meal["time"]): string {
+  return time.charAt(0).toUpperCase() + time.slice(1);
+}
+
 export function RecipeDetailScreen() {
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const route = useRoute<RouteProp<RecipeRouteParams, "RecipeDetail">>();
   const { meal } = route.params;
+  const insets = useSafeAreaInsets();
 
   const [detail, setDetail] = useState<MealDetail | null>(null);
   const [ingredients, setIngredients] = useState<MealIngredient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [siblings, setSiblings] = useState<Meal[]>(
+    route.params.siblings ?? [],
+  );
+  const [servings, setServings] = useState<number>(1);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadRecipe() {
       try {
         const [mealDetail, mealIngredients] = await Promise.all([
           getMealDetail(meal.id),
           getMealIngredients(meal.id),
         ]);
+        if (cancelled) return;
         setDetail(mealDetail);
         setIngredients(mealIngredients);
+        setServings(mealDetail.servingsMin ?? 1);
       } catch {
         // Keep meal card data as fallback
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
     loadRecipe();
+    return () => {
+      cancelled = true;
+    };
   }, [meal.id]);
 
+  useEffect(() => {
+    if (siblings.length > 0) return;
+    let cancelled = false;
+    getCachedDailyPlan()
+      .then((plan) => {
+        if (cancelled || !plan) return;
+        const raw = (plan as unknown as Record<string, unknown>)[meal.time];
+        let pool: DailyPlanMeal[] = [];
+        if (Array.isArray(raw)) pool = raw as DailyPlanMeal[];
+        else if (raw && typeof raw === "object")
+          pool = [raw as DailyPlanMeal];
+        const others = pool
+          .filter((m) => m.id !== meal.id)
+          .map(dailyPlanMealToMeal);
+        setSiblings(others);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [meal.id, meal.time, siblings.length]);
+
   const handleClose = () => {
-    navigation.goBack();
+    navigation.dispatch(CommonActions.goBack());
+  };
+
+  const handleMoreRecipes = () => {
+    if (siblings.length === 0) return;
+    const [next, ...rest] = siblings;
+    const nextSiblings = [...rest, meal];
+    navigation.push("RecipeDetail", { meal: next, siblings: nextSiblings });
   };
 
   const steps = parseInstructions(detail?.instructions ?? null);
-  const servings = detail?.servingsMin ?? 1;
   const calories = detail?.calories ?? meal.calories;
   const protein = detail?.proteinGrams ?? meal.protein;
   const carbs = detail?.carbsGrams ?? 0;
@@ -80,121 +204,341 @@ export function RecipeDetailScreen() {
   const fiber = detail?.fiberGrams ?? 0;
   const prepTime = detail?.prepTime ?? meal.prepTime;
   const description = detail?.description ?? meal.whyLine;
+  const servingsBase = detail?.servingsMin ?? 1;
+  const dietTags = (detail?.diets ?? [])
+    .map((d) => d.name)
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const microsPct = useMemo(
+    () => computeMicrosPctRollup(detail?.nutrientsJson ?? null),
+    [detail?.nutrientsJson],
+  );
+
+  const heroSource = meal.imageUrl
+    ? { uri: meal.imageUrl }
+    : detail?.imageAsset
+      ? { uri: detail.imageAsset }
+      : null;
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-          <Text style={styles.closeText}>{"\u00D7"}</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Recipe</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color={K.textMuted} />
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Hero image */}
-          <View style={styles.heroContainer}>
-            {meal.imageUrl ? (
-              <Image source={{ uri: meal.imageUrl }} style={styles.heroImage} />
-            ) : (
-              <View style={styles.heroPlaceholder}>
-                <Text style={styles.heroPlaceholderText}>🍽️</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Title section */}
-          <View style={styles.titleSection}>
-            <Text style={styles.mealName}>{meal.name}</Text>
-            {description ? (
-              <Text style={styles.whyLine}>{description}</Text>
-            ) : null}
-
-            {/* Quick info */}
-            <View style={styles.quickInfo}>
-              <View style={styles.infoBadge}>
-                <Text style={styles.infoBadgeText}>{prepTime} min</Text>
-              </View>
-              <View style={styles.infoBadge}>
-                <Text style={styles.infoBadgeText}>
-                  {servings} {servings === 1 ? "serving" : "servings"}
-                </Text>
-              </View>
-              <View style={styles.infoBadge}>
-                <Text style={styles.infoBadgeText}>{Math.round(Number(calories))} cal</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Nutrition breakdown */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>NUTRITION</Text>
-            <View style={styles.nutritionGrid}>
-              <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionValue}>{Math.round(Number(protein))}g</Text>
-                <Text style={styles.nutritionLabel}>Protein</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionValue}>{Math.round(Number(carbs))}g</Text>
-                <Text style={styles.nutritionLabel}>Carbs</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionValue}>{Math.round(Number(fat))}g</Text>
-                <Text style={styles.nutritionLabel}>Fat</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionValue}>{Math.round(Number(fiber))}g</Text>
-                <Text style={styles.nutritionLabel}>Fiber</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Ingredients */}
-          {ingredients.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>INGREDIENTS</Text>
-              <View style={styles.ingredientsList}>
-                {ingredients.map((ing) => (
-                  <View key={ing.id} style={styles.ingredientRow}>
-                    <View style={styles.ingredientBullet} />
-                    <Text style={styles.ingredientText}>
-                      {ing.representText || `${ing.quantity} ${ing.measurement} ${ing.ingredient.name}`}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 40 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* Hero */}
+        <View style={styles.heroContainer}>
+          {heroSource ? (
+            <Image
+              source={heroSource}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.heroPlaceholder}>
+              <Text style={styles.heroPlaceholderText}>🍽️</Text>
             </View>
           )}
+          {/* Top scrim so floating header buttons stay readable */}
+          <Svg
+            style={StyleSheet.absoluteFill}
+            width="100%"
+            height="100%"
+            preserveAspectRatio="none"
+          >
+            <Defs>
+              <LinearGradient id="heroScrim" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor="#361416" stopOpacity="0.55" />
+                <Stop offset="0.5" stopColor="#361416" stopOpacity="0" />
+              </LinearGradient>
+            </Defs>
+            <Rect width="100%" height="100%" fill="url(#heroScrim)" />
+          </Svg>
+        </View>
+
+        {/* Content sheet (overlaps hero) */}
+        <View style={styles.sheet}>
+          {/* Title + tag chips */}
+          <View style={styles.titleBlock}>
+            <Text style={styles.mealName}>{meal.name}</Text>
+            <View style={styles.tagRow}>
+              {prepTime ? (
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>{prepTime} minutes</Text>
+                </View>
+              ) : null}
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>{capitalizeSlot(meal.time)}</Text>
+              </View>
+              {dietTags.map((d) => (
+                <View key={d} style={styles.tag}>
+                  <Text style={styles.tagText}>{d}</Text>
+                </View>
+              ))}
+              {servingsBase ? (
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>
+                    {servingsBase}{" "}
+                    {servingsBase === 1 ? "serving" : "servings"}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Nutrition: calories pill + 4 macro chips */}
+          <View style={styles.nutritionRow}>
+            <View style={styles.caloriesPill}>
+              <Text style={styles.caloriesLabel}>Calories</Text>
+              <Text style={styles.caloriesValue}>
+                {Math.round(Number(calories ?? 0))}
+              </Text>
+            </View>
+            <View style={styles.macrosPill}>
+              <MacroChip
+                label="Protein"
+                value={Math.round(Number(protein ?? 0))}
+              />
+              <MacroChip
+                label="Carbs"
+                value={Math.round(Number(carbs ?? 0))}
+              />
+              <MacroChip label="Fat" value={Math.round(Number(fat ?? 0))} />
+              <MacroChip
+                label="Fiber"
+                value={Math.round(Number(fiber ?? 0))}
+              />
+            </View>
+          </View>
+
+          {/* %DV rollup (vitamins + minerals) */}
+          {microsPct !== null ? (
+            <View style={styles.dvRow}>
+              <DvMeter pct={microsPct} />
+              <Text style={styles.dvValue}>{microsPct}%</Text>
+              <Text style={styles.dvCaption}>
+                of daily vitamins + minerals
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Message from Ester */}
+          {description ? (
+            <View style={styles.esterBlock}>
+              <View style={styles.esterEyebrowRow}>
+                <View style={styles.esterEyebrowDot} />
+                <Text style={styles.esterEyebrowText}>Message from Ester</Text>
+              </View>
+              <View style={styles.esterCard}>
+                <Image
+                  source={require("../../../assets/images/ester-logo.png")}
+                  style={styles.esterAvatar}
+                  resizeMode="cover"
+                />
+                <View style={styles.esterTextWrap}>
+                  <Text style={styles.esterText}>{description}</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Ingredients */}
+          {ingredients.length > 0 ? (
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionHeaderLeft}>
+                  <View style={styles.sectionTitleRow}>
+                    <Text style={styles.sectionTitle}>Ingredients</Text>
+                    <View style={styles.countBadge}>
+                      <Text style={styles.countBadgeText}>
+                        {ingredients.length}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.sectionMeta}>
+                    {servings} {servings === 1 ? "Serving" : "Servings"}
+                  </Text>
+                </View>
+                <View style={styles.servingsStepper}>
+                  <TouchableOpacity
+                    style={styles.stepperBtn}
+                    onPress={() =>
+                      setServings((s) => Math.max(1, s - 1))
+                    }
+                    hitSlop={8}
+                  >
+                    <Text style={styles.stepperGlyph}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.stepperValue}>{servings}</Text>
+                  <TouchableOpacity
+                    style={styles.stepperBtn}
+                    onPress={() => setServings((s) => s + 1)}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.stepperGlyph}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.ingredientsList}>
+                {ingredients.map((ing, idx) => {
+                  const scale = servingsBase > 0 ? servings / servingsBase : 1;
+                  const qty = ing.quantity * scale;
+                  const qtyDisplay =
+                    qty >= 10
+                      ? Math.round(qty).toString()
+                      : qty.toFixed(qty < 1 ? 2 : 1).replace(/\.0+$/, "");
+                  return (
+                    <View
+                      key={ing.id + idx}
+                      style={[
+                        styles.ingredientRow,
+                        idx === 0 ? styles.ingredientRowFirst : null,
+                      ]}
+                    >
+                      <Text style={styles.ingredientQty}>
+                        {qtyDisplay} {ing.measurement}
+                      </Text>
+                      <Text style={styles.ingredientName}>
+                        {ing.ingredient.name}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
 
           {/* Instructions */}
-          {steps.length > 0 && (
+          {steps.length > 0 ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>INSTRUCTIONS</Text>
+              <Text style={styles.sectionTitle}>Instructions</Text>
               <View style={styles.stepsList}>
-                {steps.map((step, index) => (
-                  <View key={index} style={styles.stepRow}>
-                    <View style={styles.stepNumber}>
-                      <Text style={styles.stepNumberText}>{index + 1}</Text>
-                    </View>
+                {steps.map((step, idx) => (
+                  <View key={idx} style={styles.stepCard}>
+                    <Text style={styles.stepLabel}>
+                      {STEP_LABELS[idx] ?? `STEP ${idx + 1}`}
+                    </Text>
                     <Text style={styles.stepText}>{step}</Text>
                   </View>
                 ))}
               </View>
             </View>
-          )}
-        </ScrollView>
-      )}
-    </SafeAreaView>
+          ) : null}
+
+          {/* More recipes CTA */}
+          {siblings.length > 0 ? (
+            <TouchableOpacity
+              style={styles.moreCta}
+              onPress={handleMoreRecipes}
+              activeOpacity={0.85}
+            >
+              <Image
+                source={require("../../../assets/images/ester-logo.png")}
+                style={styles.moreCtaAvatar}
+                resizeMode="contain"
+              />
+              <View style={styles.moreCtaRight}>
+                <Text style={styles.moreCtaText}>
+                  I have some more recipes!
+                </Text>
+                <View style={styles.moreCtaButton}>
+                  <Text style={styles.moreCtaButtonLabel}>Show me!</Text>
+                  <Text style={styles.moreCtaButtonGlyph}>→</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </ScrollView>
+
+      {/* Floating header buttons */}
+      <SafeAreaView
+        edges={["top"]}
+        style={styles.floatingHeader}
+        pointerEvents="box-none"
+      >
+        <View style={styles.floatingHeaderRow}>
+          <TouchableOpacity
+            style={styles.headerCloseButton}
+            onPress={handleClose}
+            hitSlop={8}
+            accessibilityLabel="Close"
+          >
+            <Text style={styles.headerCloseGlyph}>✕</Text>
+          </TouchableOpacity>
+          <View style={styles.headerRightActions}>
+            <View style={styles.headerActionButton}>
+              <Text style={styles.headerActionGlyph}>↗</Text>
+            </View>
+            <View style={styles.headerActionButton}>
+              <Text style={styles.headerActionGlyph}>♡</Text>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+
+      {isLoading ? (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator size="small" color={K.brown} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function MacroChip({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.macroChip}>
+      <Text style={styles.macroLabel}>{label}</Text>
+      <Text style={styles.macroValue}>
+        {value}
+        <Text style={styles.macroUnit}>g</Text>
+      </Text>
+    </View>
+  );
+}
+
+function DvMeter({ pct }: { pct: number }) {
+  const size = 20;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - 2;
+  const circumference = 2 * Math.PI * r;
+  const filled = Math.max(0, Math.min(100, pct));
+  const dashOffset = circumference * (1 - filled / 100);
+  return (
+    <Svg width={size} height={size}>
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        stroke={K.border}
+        strokeWidth={3}
+        fill="none"
+      />
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        stroke={K.brown}
+        strokeWidth={3}
+        fill="none"
+        strokeDasharray={`${circumference} ${circumference}`}
+        strokeDashoffset={dashOffset}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${cx} ${cy})`}
+      />
+    </Svg>
   );
 }
 
@@ -203,175 +547,442 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: K.white,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: K.border,
-  },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: K.bone,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  closeText: {
-    fontSize: 24,
-    color: K.brown,
-    fontWeight: "300",
-    marginTop: -2,
-  },
-  headerTitle: {
-    ...typography.bodyMedium,
-    color: K.brown,
-    fontWeight: "600",
-  },
-  headerSpacer: {
-    width: 36,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scrollView: {
+  scroll: {
     flex: 1,
   },
-  content: {
-    paddingBottom: 40,
+  scrollContent: {
+    flexGrow: 1,
   },
+  // Hero
   heroContainer: {
-    height: 220,
+    width: SCREEN_WIDTH,
+    height: HERO_HEIGHT,
     backgroundColor: K.bone,
+    overflow: "hidden",
   },
   heroImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   heroPlaceholder: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
   heroPlaceholderText: {
     fontSize: 64,
   },
-  titleSection: {
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: K.border,
+  // Sheet (overlaps hero with rounded top-right corner)
+  sheet: {
+    marginTop: -90,
+    backgroundColor: K.white,
+    borderTopRightRadius: 64,
+    paddingHorizontal: 18,
+    paddingTop: 30,
+    paddingBottom: 25,
+    gap: 30,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 19.2,
+    shadowOffset: { width: 0, height: -4 },
+  },
+  // Title block
+  titleBlock: {
+    gap: 12,
   },
   mealName: {
-    ...typography.h1,
-    fontSize: 28,
+    fontFamily: fonts.dmSans,
+    fontSize: 32,
+    lineHeight: 36,
+    letterSpacing: -0.32,
     color: K.brown,
-    marginBottom: spacing.xs,
   },
-  whyLine: {
-    ...typography.body,
-    color: K.textMuted,
-    fontStyle: "italic",
-    marginBottom: spacing.md,
-  },
-  quickInfo: {
+  tagRow: {
     flexDirection: "row",
-    gap: spacing.md,
+    flexWrap: "wrap",
+    gap: 6,
   },
-  infoBadge: {
-    flexDirection: "row",
-    alignItems: "center",
+  tag: {
     backgroundColor: K.bone,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tagText: {
+    fontFamily: fonts.dmSans,
+    fontSize: 12,
+    letterSpacing: -0.12,
+    color: K.brown,
+  },
+  // Nutrition row
+  nutritionRow: {
+    flexDirection: "row",
     gap: 4,
+    alignItems: "stretch",
   },
-  infoBadgeText: {
-    ...typography.caption,
-    color: K.brown,
-    fontWeight: "500",
-  },
-  section: {
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: K.border,
-  },
-  sectionTitle: {
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: K.textMuted,
-    fontWeight: "600",
-    marginBottom: spacing.md,
-  },
-  nutritionGrid: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  nutritionItem: {
+  caloriesPill: {
+    width: 77,
+    height: 80,
+    backgroundColor: K.blue,
+    borderRadius: 999,
     alignItems: "center",
-    flex: 1,
+    justifyContent: "center",
+    paddingVertical: 16,
+    gap: 8,
   },
-  nutritionValue: {
-    ...typography.h3,
+  caloriesLabel: {
+    fontFamily: fonts.dmSans,
+    fontSize: 12,
+    letterSpacing: -0.12,
     color: K.brown,
-    marginBottom: 2,
   },
-  nutritionLabel: {
-    ...typography.caption,
-    color: K.textMuted,
+  caloriesValue: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 20,
+    letterSpacing: -0.2,
+    color: K.brown,
   },
-  ingredientsList: {
-    gap: spacing.sm,
-  },
-  ingredientRow: {
+  macrosPill: {
+    flex: 1,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.md,
+    backgroundColor: K.bone,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 24,
+    borderBottomLeftRadius: 8,
+    paddingVertical: 4,
   },
-  ingredientBullet: {
+  macroChip: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+  },
+  macroLabel: {
+    fontFamily: fonts.dmSans,
+    fontSize: 12,
+    letterSpacing: -0.12,
+    color: K.brown,
+  },
+  macroValue: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 20,
+    letterSpacing: -0.2,
+    color: K.brown,
+  },
+  macroUnit: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 13,
+  },
+  // %DV row
+  dvRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dvValue: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 16,
+    letterSpacing: -0.16,
+    color: K.brown,
+    marginLeft: 5,
+  },
+  dvCaption: {
+    fontFamily: fonts.dmSans,
+    fontSize: 12,
+    letterSpacing: -0.12,
+    color: K.sub,
+  },
+  // Ester message
+  esterBlock: {
+    gap: 6,
+  },
+  esterEyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  esterEyebrowDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: K.ochre,
-    marginTop: 7,
   },
-  ingredientText: {
-    ...typography.body,
+  esterEyebrowText: {
+    fontFamily: fonts.dmSans,
+    fontSize: 12,
+    letterSpacing: -0.12,
     color: K.brown,
-    flex: 1,
   },
-  stepsList: {
-    gap: spacing.md,
-  },
-  stepRow: {
+  esterCard: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.md,
+    gap: 8,
+    backgroundColor: K.brown,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 40,
+    borderBottomRightRadius: 40,
+    borderBottomLeftRadius: 40,
+    paddingTop: 16,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    overflow: "hidden",
   },
-  stepNumber: {
+  esterAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: K.bone,
+  },
+  esterTextWrap: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  esterText: {
+    fontFamily: fonts.dmSans,
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.16,
+    color: "#F3EFE3",
+  },
+  // Section
+  divider: {
+    height: 1,
+    backgroundColor: K.border,
+  },
+  section: {
+    gap: 30,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 30,
+  },
+  sectionHeaderLeft: {
+    flex: 1,
+    gap: 6,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sectionTitle: {
+    fontFamily: fonts.dmSans,
+    fontSize: 24,
+    letterSpacing: -0.24,
+    color: K.brown,
+  },
+  countBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: K.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countBadgeText: {
+    fontFamily: fonts.dmSans,
+    fontSize: 14,
+    letterSpacing: -0.14,
+    color: K.brown,
+  },
+  sectionMeta: {
+    fontFamily: fonts.dmSans,
+    fontSize: 14,
+    letterSpacing: -0.14,
+    color: K.brown,
+  },
+  servingsStepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: K.white,
+    borderColor: K.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  stepperBtn: {
     width: 28,
     height: 28,
-    borderRadius: 14,
-    backgroundColor: K.brown,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
-  stepNumberText: {
-    ...typography.bodyMedium,
-    color: K.bone,
-    fontWeight: "600",
-    fontSize: 14,
+  stepperGlyph: {
+    fontSize: 22,
+    fontFamily: fonts.dmSans,
+    color: K.brown,
+    lineHeight: 24,
+  },
+  stepperValue: {
+    minWidth: 30,
+    textAlign: "center",
+    fontFamily: fonts.dmSans,
+    fontSize: 20,
+    letterSpacing: -0.2,
+    color: K.brown,
+  },
+  // Ingredients list
+  ingredientsList: {
+    gap: 0,
+  },
+  ingredientRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingBottom: 12,
+    paddingTop: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: K.border,
+  },
+  ingredientRowFirst: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: K.border,
+  },
+  ingredientQty: {
+    width: 70,
+    fontFamily: fonts.dmSans,
+    fontSize: 16,
+    letterSpacing: -0.16,
+    color: K.brown,
+  },
+  ingredientName: {
+    flex: 1,
+    fontFamily: fonts.dmSansBold,
+    fontSize: 16,
+    letterSpacing: -0.16,
+    color: K.brown,
+  },
+  // Instructions
+  stepsList: {
+    gap: 12,
+  },
+  stepCard: {
+    backgroundColor: K.bone,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 40,
+    borderBottomLeftRadius: 8,
+    padding: 16,
+    gap: 10,
+  },
+  stepLabel: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 12,
+    letterSpacing: -0.12,
+    color: K.sub,
   },
   stepText: {
-    ...typography.body,
+    fontFamily: fonts.dmSans,
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.16,
     color: K.brown,
+  },
+  // More recipes CTA
+  moreCta: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    backgroundColor: K.brown,
+    borderRadius: 18,
+    paddingTop: 18,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 12,
+    marginTop: 10,
+  },
+  moreCtaAvatar: {
+    width: 96,
+    height: 122,
+  },
+  moreCtaRight: {
     flex: 1,
+    alignItems: "flex-end",
+    gap: 16,
+  },
+  moreCtaText: {
+    fontFamily: fonts.dmSans,
+    fontSize: 20,
     lineHeight: 24,
+    letterSpacing: -0.2,
+    color: "#F3EFE3",
+    textAlign: "right",
+  },
+  moreCtaButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: K.white,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    minHeight: 32,
+  },
+  moreCtaButtonLabel: {
+    fontFamily: fonts.dmSansMedium,
+    fontSize: 14,
+    color: K.brown,
+  },
+  moreCtaButtonGlyph: {
+    fontFamily: fonts.dmSans,
+    fontSize: 16,
+    color: K.brown,
+  },
+  // Floating header
+  floatingHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  floatingHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 21,
+    paddingTop: 8,
+  },
+  headerCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: K.bone,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerCloseGlyph: {
+    fontSize: 18,
+    color: K.brown,
+    fontFamily: fonts.dmSans,
+  },
+  headerRightActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  headerActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: K.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerActionGlyph: {
+    fontSize: 18,
+    color: K.brown,
+    fontFamily: fonts.dmSans,
+  },
+  // Loading
+  loadingOverlay: {
+    position: "absolute",
+    top: HERO_HEIGHT - 50,
+    left: 0,
+    right: 0,
+    alignItems: "center",
   },
 });

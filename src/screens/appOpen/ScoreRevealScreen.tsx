@@ -9,6 +9,7 @@ import { ContinueButton } from "../../components/survey/ContinueButton";
 import { ScoreRing } from "../../components/survey/ScoreRing";
 import { getProfile } from "../../services/profile";
 import { getResetScore } from "../../services/resetScore";
+import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 
 export function ScoreRevealScreen() {
@@ -47,6 +48,11 @@ export function ScoreRevealScreen() {
     );
   };
 
+  const swipeHandlers = useSwipeToAdvance({
+    axis: "horizontal",
+    onAdvance: exitToHome,
+  });
+
   const displayedScore = score ?? 0;
   const confidencePct =
     confidence !== null ? Math.max(0, Math.min(100, Math.round(confidence))) : 50;
@@ -63,7 +69,11 @@ export function ScoreRevealScreen() {
   })();
 
   return (
-    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={styles.root}
+      edges={["top", "bottom"]}
+      {...swipeHandlers}
+    >
       <StatusBar barStyle="dark-content" translucent />
 
       <View style={styles.content}>

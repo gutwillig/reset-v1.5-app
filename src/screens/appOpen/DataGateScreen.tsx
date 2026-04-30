@@ -17,6 +17,7 @@ import { getProfile } from "../../services/profile";
 import { getCheckInHistory } from "../../services/checkIn";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import { useAppPalette } from "../../hooks/useAppPalette";
+import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import { useApp } from "../../context/AppContext";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 
@@ -83,6 +84,12 @@ export function DataGateScreen() {
     navigation.replace("NextMeal");
   };
 
+  const swipeHandlers = useSwipeToAdvance({
+    axis: "horizontal",
+    onAdvance: handleSkipToMeals,
+    enabled: ready && (debugForceShow || !isFresh),
+  });
+
   if (!ready || (isFresh && !debugForceShow)) {
     return (
       <View style={[styles.root, { backgroundColor: outerBg }]}>
@@ -96,7 +103,10 @@ export function DataGateScreen() {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: outerBg }]}>
+    <View
+      style={[styles.root, { backgroundColor: outerBg }]}
+      {...swipeHandlers}
+    >
       <StatusBar barStyle={statusBarStyle} translucent />
       <View
         style={[

@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Camera } from "expo-camera";
 import { ShenaiSdkView } from "react-native-shenai-sdk";
 import { K } from "../../constants/colors";
@@ -110,6 +110,7 @@ function deriveBiometrics(results: ScanResults) {
 export function ScanScreen({ navigation, route }: Props) {
   const mode = route.params?.mode ?? "onboarding";
   const { setBiometrics } = useApp();
+  const insets = useSafeAreaInsets();
   const [sdkReady, setSdkReady] = useState(false);
   const [screenState, setScreenState] = useState<ScreenState>("initializing");
   const [phase, setPhase] = useState(0);
@@ -435,6 +436,25 @@ export function ScanScreen({ navigation, route }: Props) {
     }
   }, [navigation, mode]);
 
+  // Persistent exit: tearing down any in-flight scan and returning the user
+  // to the screen that pushed Scan. Partial data is never persisted because
+  // setBiometrics / submitScanResults only run after a FINISHED measurement.
+  const handleCancel = useCallback(async () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (positionTimeoutRef.current) clearTimeout(positionTimeoutRef.current);
+    try {
+      await stopScan();
+    } catch {
+      // stopScan may throw if no scan is active — safe to ignore.
+    }
+    try {
+      await shutdownShenAI();
+    } catch {
+      // shutdownShenAI may throw if SDK never initialized — safe to ignore.
+    }
+    navigation.goBack();
+  }, [navigation]);
+
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0%", "100%"],
@@ -482,6 +502,27 @@ export function ScanScreen({ navigation, route }: Props) {
       ) : (
         <View style={styles.sdkPlaceholder} />
       )}
+
+      {/* Persistent cancel — visible at every state so users can always exit.
+          The Shen SDK letterboxes its camera preview internally when its parent
+          becomes too tall (error state has a taller controls bar). The native
+          view's RN frame stays full-width, so we approximate the visible camera
+          right edge with a heuristic inset that widens in the shrunken state. */}
+      <TouchableOpacity
+        style={[
+          styles.cancelButton,
+          {
+            top: insets.top,
+            right: screenState === "error" ? 32 : 12,
+          },
+        ]}
+        onPress={handleCancel}
+        hitSlop={20}
+        accessibilityLabel="Cancel scan"
+        accessibilityRole="button"
+      >
+        <Text style={styles.cancelGlyph}>✕</Text>
+      </TouchableOpacity>
 
       {/* Our controls below the SDK */}
       <View style={styles.controlsBar}>
@@ -642,5 +683,19 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     backgroundColor: K.mustard,
+  },
+  cancelButton: {
+    position: "absolute",
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    elevation: 10,
+  },
+  cancelGlyph: {
+    fontSize: 22,
+    color: "rgba(255,255,255,0.95)",
+    fontWeight: "400",
   },
 });

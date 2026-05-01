@@ -113,7 +113,7 @@ export function HomeScreenV2() {
   );
 
   const handleScanAgain = useCallback(() => {
-    navigation.navigate("Scan", { mode: "rescan" });
+    navigation.navigate("Scan", { mode: "rescan", returnTo: "ScoreReveal" });
   }, [navigation]);
 
   const handleStartCheckIn = useCallback(() => {

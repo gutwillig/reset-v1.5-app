@@ -166,7 +166,7 @@ export function HomeScreen() {
 
   // Scan nudge (between yap and observation)
   const handleStartScan = useCallback(() => {
-    navigation.navigate("Scan", { mode: "rescan" });
+    navigation.navigate("Scan", { mode: "rescan", returnTo: "ScoreReveal" });
   }, [navigation]);
   const { nudge: scanNudge } = useScanNudge(
     handleStartScan,

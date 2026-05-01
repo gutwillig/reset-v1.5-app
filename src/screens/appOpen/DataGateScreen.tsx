@@ -66,7 +66,7 @@ export function DataGateScreen() {
 
   const handleScan = () => {
     const parent = navigation.getParent();
-    parent?.navigate("Scan", { mode: "rescan" });
+    parent?.navigate("Scan", { mode: "rescan", returnTo: "ScoreReveal" });
   };
 
   const handleAskEster = () => {

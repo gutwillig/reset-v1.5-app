@@ -12,7 +12,6 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { K } from "../../constants/colors";
 import { submitCheckIn } from "../../services/checkIn";
 import { refreshDailyPlan, cacheDailyPlan } from "../../services/meals";
-import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import { SurveyHeader } from "../../components/survey/SurveyHeader";
 import { ContinueButton } from "../../components/survey/ContinueButton";
 import { FeelingSlider } from "../../components/survey/FeelingSlider";
@@ -116,12 +115,6 @@ export function AppOpenSurveyV2Screen() {
     return "How was the quality of your sleep?";
   })();
 
-  const swipeHandlers = useSwipeToAdvance({
-    axis: "horizontal",
-    onAdvance: handleContinue,
-    enabled: canContinue && !submitting,
-  });
-
   const renderBody = () => {
     if (step === 1) return <FeelingSlider value={feeling} onChange={setFeeling} />;
     if (step === 2)
@@ -152,11 +145,7 @@ export function AppOpenSurveyV2Screen() {
   };
 
   return (
-    <SafeAreaView
-      style={styles.root}
-      edges={["top", "bottom"]}
-      {...swipeHandlers}
-    >
+    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" translucent />
       <ScrollView
         contentContainerStyle={styles.content}

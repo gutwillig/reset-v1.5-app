@@ -31,7 +31,12 @@ import {
 } from "../../services/shenai";
 
 type Props = NativeStackScreenProps<any, "Scan"> & {
-  route: { params?: { mode?: "onboarding" | "rescan" } };
+  route: {
+    params?: {
+      mode?: "onboarding" | "rescan";
+      returnTo?: "ScanResults" | "ScoreReveal";
+    };
+  };
 };
 
 const SHEN_API_KEY =
@@ -109,6 +114,7 @@ function deriveBiometrics(results: ScanResults) {
 
 export function ScanScreen({ navigation, route }: Props) {
   const mode = route.params?.mode ?? "onboarding";
+  const returnTo = route.params?.returnTo ?? "ScanResults";
   const { setBiometrics } = useApp();
   const insets = useSafeAreaInsets();
   const [sdkReady, setSdkReady] = useState(false);
@@ -384,13 +390,19 @@ export function ScanScreen({ navigation, route }: Props) {
       setTimeout(async () => {
         await shutdownShenAI();
         if (mode === "rescan") {
-          // Post-onboarding: submit to backend and go back
+          // Post-onboarding: submit to backend.
           try {
             await submitScanResults(results);
           } catch {
             // Non-blocking: scan still saved locally
           }
-          navigation.replace("ScanResults");
+          if (returnTo === "ScoreReveal") {
+            // AppOpen flow: jump back into the in-progress check-in so the
+            // user sees their updated score, not the standalone rescan modal.
+            navigation.navigate("AppOpenFlow", { screen: "ScoreReveal" });
+          } else {
+            navigation.replace("ScanResults");
+          }
         } else {
           navigation.replace("ScanReveal");
         }

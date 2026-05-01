@@ -41,6 +41,7 @@ export type MainStackParamList = {
   };
   Scan: {
     mode: "rescan";
+    returnTo?: "ScanResults" | "ScoreReveal";
   };
   ScanResults: undefined;
 };

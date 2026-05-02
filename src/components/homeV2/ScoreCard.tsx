@@ -16,6 +16,7 @@ interface ScoreCardProps {
   latestScanAt: string | null;
   trendDelta?: number | null;
   onScanAgain: () => void;
+  onExplain?: () => void;
 }
 
 const RING_MAX_WIDTH = 320;
@@ -66,6 +67,7 @@ export function ScoreCard({
   latestScanAt,
   trendDelta = null,
   onScanAgain,
+  onExplain,
 }: ScoreCardProps) {
   const { nestedBg, textColor, subtleText, evening } = useAppPalette();
   const { width: windowWidth } = useWindowDimensions();
@@ -77,8 +79,16 @@ export function ScoreCard({
   );
   const accent = evening ? "#B8D0D6" : K.brown;
 
+  const Wrapper: React.ComponentType<any> = onExplain ? TouchableOpacity : View;
+  const wrapperProps = onExplain
+    ? { onPress: onExplain, activeOpacity: 0.9, accessibilityLabel: "Explain my score" }
+    : {};
+
   return (
-    <View style={[styles.card, { backgroundColor: nestedBg }]}>
+    <Wrapper
+      style={[styles.card, { backgroundColor: nestedBg }]}
+      {...wrapperProps}
+    >
       <View style={styles.headerRow}>
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: textColor }]}>
@@ -90,9 +100,11 @@ export function ScoreCard({
         </View>
         {trendDelta !== null && trendDelta !== undefined ? (
           <View style={styles.trend}>
-            <Text style={[styles.trendArrow, { color: K.ochre }]}>▲</Text>
+            <Text style={[styles.trendArrow, { color: K.ochre }]}>
+              {trendDelta >= 0 ? "▲" : "▼"}
+            </Text>
             <Text style={[styles.trendText, { color: textColor }]}>
-              up by {Math.abs(trendDelta)}
+              {trendDelta >= 0 ? "up" : "down"} by {Math.abs(trendDelta)}
             </Text>
           </View>
         ) : null}
@@ -121,7 +133,7 @@ export function ScoreCard({
       <Text style={[styles.timestamp, { color: subtleText }]}>
         {formatLastScan(latestScanAt)}
       </Text>
-    </View>
+    </Wrapper>
   );
 }
 

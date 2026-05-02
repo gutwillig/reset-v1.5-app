@@ -99,12 +99,12 @@ export function ScoreRevealScreen() {
           {trendDelta !== null ? (
             <View style={styles.trendWrap}>
               <View style={styles.trendRow}>
-                <Text style={styles.trendArrow}>▲</Text>
+                <Text style={styles.trendArrow}>{trendDelta >= 0 ? "▲" : "▼"}</Text>
                 <Text style={styles.trendText}>
                   {trendDelta >= 0 ? "up" : "down"} by {Math.abs(trendDelta)}
                 </Text>
               </View>
-              <Text style={styles.trendCaption}>since last scan</Text>
+              <Text style={styles.trendCaption}>since yesterday</Text>
             </View>
           ) : null}
         </View>

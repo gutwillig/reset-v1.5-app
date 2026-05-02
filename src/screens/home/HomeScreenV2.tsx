@@ -116,6 +116,10 @@ export function HomeScreenV2() {
     navigation.navigate("Scan", { mode: "rescan", returnTo: "ScoreReveal" });
   }, [navigation]);
 
+  const handleExplainScore = useCallback(() => {
+    navigation.navigate("ScanInsights");
+  }, [navigation]);
+
   const handleStartCheckIn = useCallback(() => {
     (navigation as any).navigate("AppOpenFlow", { screen: "SurveyV2" });
   }, [navigation]);
@@ -231,11 +235,14 @@ export function HomeScreenV2() {
           latestScanAt={latestScanAt}
           trendDelta={trendDelta}
           onScanAgain={handleScanAgain}
+          onExplain={handleExplainScore}
         />
 
         <ConfidenceCard confidence={confidence} daysToFull={daysToFullConfidence} />
 
-        <Text style={[styles.sectionHeading, { color: textColor }]}>Recipes for you</Text>
+        <Text style={[styles.sectionHeading, { color: textColor }]}>
+          Based on your scan, here are meals for you
+        </Text>
 
         <MealTabsSection
           breakfast={dailyPlan?.breakfast ?? []}

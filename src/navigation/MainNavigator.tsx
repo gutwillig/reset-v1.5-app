@@ -11,6 +11,7 @@ import { SettingsScreen } from "../screens/settings/SettingsScreen";
 import { YapCallScreen } from "../screens/yap/YapCallScreen";
 import { ScanScreen } from "../screens/onboarding/ScanScreen";
 import { ScanResultsScreen } from "../screens/scan/ScanResultsScreen";
+import { ScanInsightsScreen } from "../screens/scan/ScanInsightsScreen";
 import { SavedMealsScreen } from "../screens/favorites/SavedMealsScreen";
 import { WeeklyReviewScreen } from "../screens/review/WeeklyReviewScreen";
 import { TabBar } from "../components";
@@ -44,6 +45,7 @@ export type MainStackParamList = {
     returnTo?: "ScanResults" | "ScoreReveal";
   };
   ScanResults: undefined;
+  ScanInsights: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -159,6 +161,14 @@ export function MainNavigator() {
         component={ScanResultsScreen}
         options={{
           presentation: "fullScreenModal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="ScanInsights"
+        component={ScanInsightsScreen}
+        options={{
+          presentation: "modal",
           animation: "slide_from_bottom",
         }}
       />

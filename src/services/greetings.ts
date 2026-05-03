@@ -3,6 +3,8 @@ import { TYPE_CONFIGS } from "../constants/types";
 
 // ---------- Types ----------
 
+export type ScoreBand = "low" | "steady" | "strong";
+
 export interface GreetingContext {
   // Core (from AppContext)
   metabolicType: MetabolicType;
@@ -25,11 +27,29 @@ export interface GreetingContext {
   lastCheckInAt: string | null;
   lastScanAt: string | null;
 
+  // Reset Score (today's value + delta from prior day, both null if unknown)
+  score: number | null;
+  scoreBand: ScoreBand | null;
+  scoreDelta: number | null;
+
   // Derived
   daysSinceLastCheckIn: number | null;
   isGlanceOnly: boolean;
   lapseTier: 0 | 1 | 2 | 3 | 4;
   mealFeedbackCount: number;
+}
+
+/** Map a 0-100 reset score to a coarse tone band. */
+export function scoreBand(score: number | null): ScoreBand | null {
+  if (score === null) return null;
+  if (score < 40) return "low";
+  if (score >= 70) return "strong";
+  return "steady";
+}
+
+/** True when today's score moved meaningfully (≥8 pts) versus prior day. */
+function hasBigMove(delta: number | null): boolean {
+  return delta !== null && Math.abs(delta) >= 8;
 }
 
 export interface GreetingResult {
@@ -164,12 +184,34 @@ function scanVal(scan: Record<string, any> | null, key: string): string | null {
 
 function getLapseGreeting(ctx: GreetingContext): GreetingResult {
   const type = TYPE_CONFIGS[ctx.metabolicType];
+  // Lapse greetings prioritize the time-gap framing — band only nudges the
+  // last clause for tier-1 (short lapse) where there's still a usable score.
+  // Tier 2-4 leans into "data is stale" which conflicts with making the
+  // score the headline, so we leave those band-agnostic.
+
+  const tier1WithBand: Record<ScoreBand, string[]> = {
+    low: [
+      `A couple days off — and today's read is on the low side. Your ${type.name.toLowerCase()} pattern wants softer fuel; meals are tuned for it.`,
+      `Two days away. Today's score is low — recovery first, performance later.`,
+    ],
+    steady: [
+      `Missed a couple days. Your ${type.name.toLowerCase()} pattern is still steady; today's plan picks up where we left off.`,
+      `Two days off. You're back at a steady read — let's hold the line.`,
+    ],
+    strong: [
+      `A couple days off — but today's read is strong. Your ${type.name.toLowerCase()} pattern came back ready.`,
+      `Two days away, and you're back at a strong read. Today's plan rides that.`,
+    ],
+  };
 
   const messages: Record<1 | 2 | 3 | 4, string[]> = {
-    1: [
-      `Missed a couple days. Your ${type.name.toLowerCase()} pattern doesn't reset that fast — picking up where we left off.`,
-      `Two days off. Your rhythm is still there. Let's keep going.`,
-    ],
+    1:
+      ctx.scoreBand && ctx.score !== null
+        ? tier1WithBand[ctx.scoreBand]
+        : [
+            `Missed a couple days. Your ${type.name.toLowerCase()} pattern doesn't reset that fast — picking up where we left off.`,
+            `Two days off. Your rhythm is still there. Let's keep going.`,
+          ],
     2: [
       `It's been about a week. Your pattern shifted a bit — one check-in brings me back up to speed.`,
       `A week away. Your body kept its rhythm — I just need to catch up.`,
@@ -321,11 +363,25 @@ function getScanDay8to14Greeting(ctx: GreetingContext): GreetingResult {
 
 function getScanDay15PlusGreeting(ctx: GreetingContext): GreetingResult {
   const type = TYPE_CONFIGS[ctx.metabolicType];
-  const lines = [
-    `There are deeper markers in your scan I haven't unpacked yet. Your ${type.name.toLowerCase()} pattern has layers — Pro will open them up.`,
-    "Two weeks of biometric data. The surface-level patterns are clear. The deeper ones are waiting.",
-    `Your body's telling a more detailed story now. I've shared the headlines — the full read goes deeper.`,
-  ];
+  const typeName = type.name.toLowerCase();
+
+  const byBand: Record<ScoreBand, string[]> = {
+    low: [
+      `Two weeks of data and today's read landed low. Your ${typeName} pattern has layers — Pro will open up the why.`,
+      `Score is on the low side. The deeper markers in your scan would explain it — Pro goes there.`,
+    ],
+    steady: [
+      `There are deeper markers in your scan I haven't unpacked yet. Your ${typeName} pattern has layers — Pro will open them up.`,
+      "Two weeks of biometric data. The surface-level patterns are clear. The deeper ones are waiting.",
+      `Your body's telling a more detailed story now. I've shared the headlines — the full read goes deeper.`,
+    ],
+    strong: [
+      `Two weeks of data and today's read is strong. Your ${typeName} pattern is humming — Pro would tell you why.`,
+      `Score reads strong. There's more to unpack about why — Pro opens the deeper layers.`,
+    ],
+  };
+
+  const lines = ctx.scoreBand ? byBand[ctx.scoreBand] : byBand.steady;
   return {
     nameGreeting: ctx.userName ? `${ctx.userName}.` : "Hey.",
     message: lines[dailyIndex(lines.length)],
@@ -367,10 +423,30 @@ function getSkipDay2to4Greeting(ctx: GreetingContext): GreetingResult {
 
 function getSkipDay5PlusGreeting(ctx: GreetingContext): GreetingResult {
   const type = TYPE_CONFIGS[ctx.metabolicType];
-  const lines = [
-    `Your ${type.name.toLowerCase()} pattern is holding. Today's plan is dialed in.`,
-    `I'm getting confident in your pattern. Today's meals are tuned for a ${type.name.toLowerCase()}.`,
-  ];
+  const typeName = type.name.toLowerCase();
+
+  const byBand: Record<ScoreBand, string[]> = {
+    low: [
+      `Today's read landed low. Your ${typeName} pattern wants softer fuel — meals are tuned for it.`,
+      `Score is on the low side today. I've leaned today's plan toward recovery, not push.`,
+    ],
+    steady: [
+      `Your ${typeName} pattern is holding steady today. The plan stays balanced.`,
+      `Steady read today. I'm getting confident in your ${typeName} pattern — meals match.`,
+    ],
+    strong: [
+      `Strong read today. Your ${typeName} pattern is working with you — today's plan rides that.`,
+      `Today's score is strong. I've used the headroom — meals are dialed for a ${typeName} in a good window.`,
+    ],
+  };
+
+  const lines = ctx.scoreBand
+    ? byBand[ctx.scoreBand]
+    : [
+        `Your ${typeName} pattern is holding. Today's plan is dialed in.`,
+        `I'm getting confident in your pattern. Today's meals are tuned for a ${typeName}.`,
+      ];
+
   return {
     nameGreeting: ctx.userName ? `${ctx.userName}.` : "Hey.",
     message: lines[dailyIndex(lines.length)],
@@ -401,18 +477,28 @@ function hasNotableSignal(ctx: GreetingContext): boolean {
 function getRecentCheckInGreeting(ctx: GreetingContext): GreetingResult {
   const type = TYPE_CONFIGS[ctx.metabolicType];
   const nameGreeting = ctx.userName ? `${ctx.userName}.` : "Hey.";
+  const band = ctx.scoreBand;
+  // A short clause that ties the surfaced signal back to today's score, only
+  // appended when we have a band so the line stays clean for users without
+  // a score yet.
+  const bandTag: Record<ScoreBand, string> = {
+    low: " Score is low today, so the plan leans into recovery.",
+    steady: " You're at a steady read today — the plan stays balanced.",
+    strong: " Score's still strong — the plan keeps the momentum.",
+  };
+  const tail = band ? bandTag[band] : "";
 
   // Sleep-based greetings
   if (ctx.latestSleepHours !== null && ctx.latestSleepHours < 6) {
     return {
       nameGreeting,
-      message: `${ctx.latestSleepHours} hours of sleep. Today's meals lean heavier on protein to keep your energy steady.`,
+      message: `${ctx.latestSleepHours} hours of sleep. Today's meals lean heavier on protein to keep your energy steady.${tail}`,
     };
   }
   if (ctx.latestSleepQuality === "poor" || ctx.latestSleepQuality === "bad") {
     return {
       nameGreeting,
-      message: "Rough night. I've weighted today's meals toward recovery — more magnesium, less sugar.",
+      message: `Rough night. I've weighted today's meals toward recovery — more magnesium, less sugar.${tail}`,
     };
   }
 
@@ -425,11 +511,11 @@ function getRecentCheckInGreeting(ctx: GreetingContext): GreetingResult {
       family: "Family stress is real. Today's meals are comfort-forward without the crash.",
       health: "Health stress noted. I've tuned your meals to support your body, not add to the load.",
     };
+    const baseMessage =
+      stressMessages[tag] || "Today's meals are adjusted to help your body recover.";
     return {
       nameGreeting,
-      message:
-        stressMessages[tag] ||
-        "Today's meals are adjusted to help your body recover.",
+      message: `${baseMessage}${tail}`,
     };
   }
 
@@ -437,13 +523,13 @@ function getRecentCheckInGreeting(ctx: GreetingContext): GreetingResult {
   if (ctx.latestEnergy === "low" || ctx.latestEnergy === "very_low") {
     return {
       nameGreeting,
-      message: `Low energy yesterday. I've front-loaded protein at breakfast and added slow carbs at lunch.`,
+      message: `Low energy yesterday. I've front-loaded protein at breakfast and added slow carbs at lunch.${tail}`,
     };
   }
   if (ctx.latestEnergy === "high" || ctx.latestEnergy === "very_high") {
     return {
       nameGreeting,
-      message: `Your energy was solid yesterday. Today's plan keeps that momentum — same balance, slight variety.`,
+      message: `Your energy was solid yesterday. Today's plan keeps that momentum — same balance, slight variety.${tail}`,
     };
   }
 
@@ -457,6 +543,15 @@ function getRecentCheckInGreeting(ctx: GreetingContext): GreetingResult {
 function getRecentScanGreeting(ctx: GreetingContext): GreetingResult {
   const nameGreeting = ctx.userName ? `${ctx.userName}.` : "Hey.";
   const scan = ctx.latestScan;
+  const band = ctx.scoreBand;
+
+  // Tail clause that ties the surfaced biometric to today's score band.
+  const bandTag: Record<ScoreBand, string> = {
+    low: " That landed your score on the lower side today.",
+    steady: " That's holding your score steady today.",
+    strong: " That's helping your score read strong today.",
+  };
+  const tail = band ? bandTag[band] : "";
 
   const stressIndex = scanVal(scan, "stressIndex");
   const heartRate = scanVal(scan, "heartRate");
@@ -467,31 +562,31 @@ function getRecentScanGreeting(ctx: GreetingContext): GreetingResult {
     const level = Number(stressIndex) > 60 ? "elevated" : Number(stressIndex) > 40 ? "moderate" : "low";
     return {
       nameGreeting,
-      message: `Stress index at ${stressIndex} — ${level}. Today's meals are calibrated to match.`,
+      message: `Stress index at ${stressIndex} — ${level}. Today's meals are calibrated to match.${tail}`,
     };
   }
   if (heartRate) {
     return {
       nameGreeting,
-      message: `Resting at ${heartRate} bpm. Your meals today are tuned to that baseline.`,
+      message: `Resting at ${heartRate} bpm. Your meals today are tuned to that baseline.${tail}`,
     };
   }
   if (recoveryScore) {
     return {
       nameGreeting,
-      message: `Recovery score: ${recoveryScore}. That shapes how I fuel you today.`,
+      message: `Recovery score: ${recoveryScore}. That shapes how I fuel you today.${tail}`,
     };
   }
   if (wellness) {
     return {
       nameGreeting,
-      message: `Wellness at ${wellness}. I'm using that to dial in today's plan.`,
+      message: `Wellness at ${wellness}. I'm using that to dial in today's plan.${tail}`,
     };
   }
 
   return {
     nameGreeting,
-    message: "Fresh scan in. I'm using your latest numbers to shape today's meals.",
+    message: `Fresh scan in. I'm using your latest numbers to shape today's meals.${tail}`,
   };
 }
 
@@ -499,6 +594,23 @@ function getRecentScanGreeting(ctx: GreetingContext): GreetingResult {
 
 function getStaleDataGreeting(ctx: GreetingContext): GreetingResult {
   const nameGreeting = ctx.userName ? `${ctx.userName}.` : "Hey.";
+  const type = TYPE_CONFIGS[ctx.metabolicType];
+
+  // When we have a score from today's check-in but no recent scan, lead with
+  // the score band so the greeting matches the visible number — but still
+  // nudge toward a scan to refresh the trustworthy signal.
+  if (ctx.score !== null && ctx.scoreBand) {
+    const byBand: Record<ScoreBand, string> = {
+      low: `Today's read landed low. Your ${type.name.toLowerCase()} pattern wants softer fuel — a quick scan would sharpen what I'm seeing.`,
+      steady: `You're in a steady zone today. A quick scan would let me push past the surface — right now I'm leaning on what you told me.`,
+      strong: `Today's read is strong. A scan would lock that in — without one I'm working from your check-in alone.`,
+    };
+    return {
+      nameGreeting,
+      message: byBand[ctx.scoreBand],
+      embedAction: "energy_checkin",
+    };
+  }
 
   if (ctx.hasScan) {
     return {
@@ -515,6 +627,91 @@ function getStaleDataGreeting(ctx: GreetingContext): GreetingResult {
   };
 }
 
+// ---------- Score-anchored greeting (Priority 4) ----------
+
+/**
+ * Triggered when today's score is interesting on its own — either a meaningful
+ * day-over-day move (>= 8 pts) or an extreme band (low/strong). The score IS
+ * the headline; we tie it to archetype and (when present) the underlying
+ * check-in signal so it doesn't read as a number in a vacuum.
+ */
+function getScoreAnchoredGreeting(ctx: GreetingContext): GreetingResult {
+  const nameGreeting = ctx.userName ? `${ctx.userName}.` : "Hey.";
+  const type = TYPE_CONFIGS[ctx.metabolicType];
+  const typeName = type.name.toLowerCase();
+  const delta = ctx.scoreDelta;
+  const band = ctx.scoreBand!;
+
+  // Big delta path — direction matters more than band when the score moved.
+  if (delta !== null && Math.abs(delta) >= 8) {
+    if (delta > 0) {
+      const lines: Record<ScoreBand, string[]> = {
+        strong: [
+          `Up ${delta} from yesterday — and a strong read. Today's plan keeps the momentum going.`,
+          `Today's score climbed ${delta}. Whatever you did yesterday, your ${typeName} pattern liked it.`,
+        ],
+        steady: [
+          `Score is up ${delta} from yesterday. Trending in the right direction — today's meals stay on the same track.`,
+          `Up ${delta} since yesterday. Your ${typeName} pattern is responding — let's keep the signal stable.`,
+        ],
+        low: [
+          `Score moved up ${delta} from yesterday — a real recovery, even if today's read is still on the lower side.`,
+          `Up ${delta}. Even from a low base, that's the direction we want.`,
+        ],
+      };
+      const variants = lines[band];
+      return {
+        nameGreeting,
+        message: variants[dailyIndex(variants.length)],
+      };
+    }
+
+    // delta < 0 (large drop)
+    const drop = Math.abs(delta);
+    const lines: Record<ScoreBand, string[]> = {
+      low: [
+        `Down ${drop} from yesterday. Today's plan leans into recovery — your ${typeName} pattern needs softer fuel.`,
+        `That's a ${drop}-point drop. I've shifted today's meals toward steady carbs and protein, less load on your system.`,
+      ],
+      steady: [
+        `Down ${drop} from yesterday. You're still in a workable zone — today's plan is built around steadying things out.`,
+        `Score dipped ${drop}. Not alarming, but worth noting — today's meals lean toward calm energy over performance.`,
+      ],
+      strong: [
+        `Down ${drop} from yesterday — but your read today is still strong. Just a softer day inside a good window.`,
+        `Score eased ${drop} from yesterday. Still in a strong band; today's plan keeps the same shape.`,
+      ],
+    };
+    const variants = lines[band];
+    return {
+      nameGreeting,
+      message: variants[dailyIndex(variants.length)],
+    };
+  }
+
+  // No big delta — extreme band path.
+  if (band === "low") {
+    const lines = [
+      `Today's read landed low. Your ${typeName} pattern is asking for recovery — meals are tuned for it.`,
+      `Score is low today. I've leaned today's plan toward softer carbs and protein — less load, more reset.`,
+    ];
+    return {
+      nameGreeting,
+      message: lines[dailyIndex(lines.length)],
+    };
+  }
+
+  // band === "strong"
+  const lines = [
+    `Today's read is strong. Your ${typeName} pattern is working with you — today's plan keeps the rhythm.`,
+    `Strong read today. I'm using that headroom — meals are dialed for performance, not just recovery.`,
+  ];
+  return {
+    nameGreeting,
+    message: lines[dailyIndex(lines.length)],
+  };
+}
+
 // ---------- Main greeting router ----------
 
 export function generateGreeting(ctx: GreetingContext): GreetingResult {
@@ -523,6 +720,13 @@ export function generateGreeting(ctx: GreetingContext): GreetingResult {
   const hasRecentCheckIn = isWithin24Hours(ctx.lastCheckInAt);
   const hasRecentScan = isWithin24Hours(ctx.lastScanAt);
   const hasAnyRecentData = hasRecentCheckIn || hasRecentScan;
+  // Score is "interesting" when it moved meaningfully day-over-day or sits in
+  // an extreme band. Steady scores with no big move fall through to the
+  // existing branches (which become band-aware via tone-only modifiers).
+  const scoreIsHeadline =
+    ctx.score !== null &&
+    ctx.scoreBand !== null &&
+    (hasBigMove(ctx.scoreDelta) || ctx.scoreBand !== "steady");
 
   // Priority 1: Lapse
   if (ctx.lapseTier > 0) {
@@ -536,12 +740,19 @@ export function generateGreeting(ctx: GreetingContext): GreetingResult {
   else if (hasRecentCheckIn && hasNotableSignal(ctx)) {
     result = getRecentCheckInGreeting(ctx);
   }
-  // Priority 4: Recent scan — surface a metric
+  // Priority 4: Score is the headline (big day-over-day move or extreme band)
+  else if (scoreIsHeadline && hasAnyRecentData) {
+    result = getScoreAnchoredGreeting(ctx);
+  }
+  // Priority 5: Recent scan — surface a metric
   else if (hasRecentScan && ctx.latestScan) {
     result = getRecentScanGreeting(ctx);
   }
-  // Priority 5: Has scan — day-progression revelations
-  else if (ctx.hasScan) {
+  // Priority 6: Has scan — day-progression revelations
+  // Scan-progression copy implies recent biometric data ("two weeks of data",
+  // "deeper markers in your scan"). Gate on scan recency so a 30-day-old scan
+  // doesn't trigger language that pretends it's fresh.
+  else if (ctx.hasScan && hasRecentScan) {
     if (ctx.dayNumber <= 1) {
       result = getScanDay1Greeting(ctx);
     } else if (ctx.dayNumber === 2) {
@@ -558,11 +769,11 @@ export function generateGreeting(ctx: GreetingContext): GreetingResult {
       result = getScanDay15PlusGreeting(ctx);
     }
   }
-  // Priority 6: Glance-only (non-scan users with no engagement)
+  // Priority 7: Glance-only (non-scan users with no engagement)
   else if (ctx.isGlanceOnly) {
     result = getGlanceOnlyGreeting(ctx);
   }
-  // Priority 7: No scan (skip) — day-progression
+  // Priority 8: No scan (skip) — day-progression
   else {
     if (ctx.dayNumber <= 1) {
       result = getSkipDay1Greeting(ctx);
@@ -600,6 +811,9 @@ export function generateSimpleGreeting(ctx: {
     compositeConfidence: 35,
     lastCheckInAt: null,
     lastScanAt: null,
+    score: null,
+    scoreBand: null,
+    scoreDelta: null,
     daysSinceLastCheckIn: null,
     isGlanceOnly: false,
     lapseTier: 0,

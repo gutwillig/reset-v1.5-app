@@ -19,6 +19,7 @@ import {
   getDayNumber,
   detectLapseTier,
   computeDaysSinceLastCheckIn,
+  scoreBand,
 } from "../../services/greetings";
 import type {
   GreetingContext,
@@ -74,33 +75,39 @@ export function AppOpenGreetingScreen() {
     const daysSinceLastCheckIn = computeDaysSinceLastCheckIn(checkInHistory);
     const checkInCount = profile.layer2.energyLog.length;
     const mealFeedbackCount = profile.layer2.mealFeedback.length;
-    const lastEnergy =
-      profile.layer2.energyLog.length > 0
-        ? profile.layer2.energyLog[0].energy
-        : null;
-    const lastStress =
-      profile.layer2.stressTags.length > 0
-        ? profile.layer2.stressTags[0].tags
-        : [];
-    const lastSleepEntry =
-      profile.layer2.sleepLog.length > 0 ? profile.layer2.sleepLog[0] : null;
-    const lastCheckInAt =
-      checkInHistory.length > 0 ? checkInHistory[0].date : null;
+    // Source the latest check-in signals from checkInHistory (which preserves
+    // empty stressTags) rather than profile.layer2.*, which the API filters
+    // by non-empty entries. Without this, a "no-stress today" check-in is
+    // silently overridden by yesterday's stress tag.
+    const latestCheckIn = checkInHistory.length > 0 ? checkInHistory[0] : null;
+    const lastEnergy = latestCheckIn?.energy ?? null;
+    const lastStress = latestCheckIn?.stressTags ?? [];
+    const lastCheckInAt = latestCheckIn?.date ?? null;
     const lastScanAt = profile.layer3.latestScan?.scannedAt ?? null;
+
+    const todayScore = resetScore?.score ?? null;
+    const priorScore = resetScore?.previousDayScore ?? null;
+    const computedDelta =
+      todayScore !== null && priorScore !== null
+        ? Math.round(todayScore - priorScore)
+        : null;
 
     const ctx: GreetingContext = {
       ...base,
       checkInCount,
       latestEnergy: lastEnergy,
       latestStressTags: lastStress,
-      latestSleepQuality: lastSleepEntry?.quality ?? null,
-      latestSleepHours: lastSleepEntry?.hours ?? null,
+      latestSleepQuality: latestCheckIn?.sleepQuality ?? null,
+      latestSleepHours: latestCheckIn?.sleepHours ?? null,
       scanCount: profile.layer3.scanCount,
       latestScan: profile.layer3.latestScan,
       esterTier: profile.confidence.esterTier ?? "Pattern Acknowledgment",
       compositeConfidence: profile.confidence.composite,
       lastCheckInAt,
       lastScanAt,
+      score: todayScore,
+      scoreBand: scoreBand(todayScore),
+      scoreDelta: computedDelta,
       daysSinceLastCheckIn,
       isGlanceOnly:
         dayNumber >= 5 && checkInCount === 0 && mealFeedbackCount === 0,

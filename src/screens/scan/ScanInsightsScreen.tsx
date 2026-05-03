@@ -182,9 +182,9 @@ export function ScanInsightsScreen() {
           </View>
           <View style={styles.esterCard}>
             <Image
-              source={require("../../../assets/images/ester-logo.png")}
+              source={require("../../../assets/images/ester-avatar.png")}
               style={styles.esterAvatar}
-              resizeMode="cover"
+              resizeMode="contain"
             />
             <View style={styles.esterTextWrap}>
               {blurbLoading ? (
@@ -376,8 +376,6 @@ const styles = StyleSheet.create({
   esterAvatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: K.brown,
   },
   esterTextWrap: {
     flex: 1,

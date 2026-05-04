@@ -33,6 +33,7 @@ export type MainStackParamList = {
   };
   RecipeDetail: {
     meal: Meal;
+    siblings?: Meal[];
   };
   SavedMeals: undefined;
   WeeklyReview: undefined;

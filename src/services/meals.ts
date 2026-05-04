@@ -176,14 +176,13 @@ export interface MealDetail {
 
 export interface MealIngredient {
   id: string;
+  ingredientId: string;
+  ingredientName: string;
+  ingredientImageUrl: string | null;
+  ingredientCategory: string | null;
   quantity: number;
   measurement: string;
   representText: string | null;
-  ingredient: {
-    id: string;
-    name: string;
-    imageUrl: string | null;
-  };
 }
 
 export async function getMealDetail(mealId: string): Promise<MealDetail> {

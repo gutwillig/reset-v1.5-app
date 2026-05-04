@@ -30,6 +30,7 @@ import {
   MealNutrient,
   DailyPlanMeal,
 } from "../../services/meals";
+import { getMealWhy } from "../../services/mealInsights";
 import type { MainStackParamList } from "../../navigation/MainNavigator";
 
 type RecipeRouteParams = {
@@ -89,6 +90,88 @@ function parseInstructions(instructions: string | null): string[] {
     .filter((s) => s.length > 10);
 }
 
+function CardGradient() {
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  return (
+    <View
+      style={[StyleSheet.absoluteFill, { backgroundColor: "#B44420" }]}
+      onLayout={(e) =>
+        setSize({
+          w: e.nativeEvent.layout.width,
+          h: e.nativeEvent.layout.height,
+        })
+      }
+    >
+      {size ? (
+        <Svg width={size.w} height={size.h}>
+          <Defs>
+            <LinearGradient
+              id="cardGradient"
+              gradientUnits="userSpaceOnUse"
+              x1={0}
+              y1={0}
+              x2={size.w}
+              y2={size.h}
+            >
+              <Stop offset="0" stopColor="#B44420" />
+              <Stop offset="0.55" stopColor="#7A2A18" />
+              <Stop offset="1" stopColor="#361416" />
+            </LinearGradient>
+          </Defs>
+          <Rect
+            width={size.w}
+            height={size.h}
+            fill="url(#cardGradient)"
+          />
+        </Svg>
+      ) : null}
+    </View>
+  );
+}
+
+const UNIT_ABBREVIATIONS: Record<string, string> = {
+  tablespoon: "tbsp",
+  tablespoons: "tbsp",
+  teaspoon: "tsp",
+  teaspoons: "tsp",
+  ounce: "oz",
+  ounces: "oz",
+  "fluid ounce": "fl oz",
+  "fluid ounces": "fl oz",
+  pound: "lb",
+  pounds: "lbs",
+  gram: "g",
+  grams: "g",
+  kilogram: "kg",
+  kilograms: "kg",
+  milliliter: "ml",
+  milliliters: "ml",
+  liter: "L",
+  liters: "L",
+};
+
+function abbreviateMeasurement(measurement: string): string {
+  if (!measurement) return "";
+  const lower = measurement.trim().toLowerCase();
+  return UNIT_ABBREVIATIONS[lower] ?? measurement;
+}
+
+function renderBoldSegments(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts
+    .filter((p) => p.length > 0)
+    .map((part, i) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return (
+          <Text key={i} style={{ fontFamily: fonts.dmSansBold }}>
+            {part.slice(2, -2)}
+          </Text>
+        );
+      }
+      return <Text key={i}>{part}</Text>;
+    });
+}
+
 const STEP_LABELS = [
   "STEP ONE",
   "STEP TWO",
@@ -138,6 +221,8 @@ export function RecipeDetailScreen() {
     route.params.siblings ?? [],
   );
   const [servings, setServings] = useState<number>(1);
+  const [esterText, setEsterText] = useState<string | null>(null);
+  const [esterLoading, setEsterLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,6 +243,27 @@ export function RecipeDetailScreen() {
       }
     }
     loadRecipe();
+    return () => {
+      cancelled = true;
+    };
+  }, [meal.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEsterLoading(true);
+    setEsterText(null);
+    getMealWhy(meal.id)
+      .then((res) => {
+        if (cancelled) return;
+        setEsterText(res.text);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEsterText(null);
+      })
+      .finally(() => {
+        if (!cancelled) setEsterLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -203,7 +309,7 @@ export function RecipeDetailScreen() {
   const fat = detail?.fatGrams ?? 0;
   const fiber = detail?.fiberGrams ?? 0;
   const prepTime = detail?.prepTime ?? meal.prepTime;
-  const description = detail?.description ?? meal.whyLine;
+  const esterMessage = esterText ?? (esterLoading ? null : meal.whyLine);
   const servingsBase = detail?.servingsMin ?? 1;
   const dietTags = (detail?.diets ?? [])
     .map((d) => d.name)
@@ -329,20 +435,29 @@ export function RecipeDetailScreen() {
           ) : null}
 
           {/* Message from Ester */}
-          {description ? (
+          {esterLoading || esterMessage ? (
             <View style={styles.esterBlock}>
               <View style={styles.esterEyebrowRow}>
                 <View style={styles.esterEyebrowDot} />
                 <Text style={styles.esterEyebrowText}>Message from Ester</Text>
               </View>
               <View style={styles.esterCard}>
+                <CardGradient />
                 <Image
-                  source={require("../../../assets/images/ester-logo.png")}
+                  source={require("../../../assets/images/ester-avatar-brown.png")}
                   style={styles.esterAvatar}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
                 <View style={styles.esterTextWrap}>
-                  <Text style={styles.esterText}>{description}</Text>
+                  {esterLoading ? (
+                    <Text style={[styles.esterText, styles.esterLoadingText]}>
+                      Thinking through why this fits you today…
+                    </Text>
+                  ) : (
+                    <Text style={styles.esterText}>
+                      {renderBoldSegments(esterMessage ?? "")}
+                    </Text>
+                  )}
                 </View>
               </View>
             </View>
@@ -405,11 +520,11 @@ export function RecipeDetailScreen() {
                         idx === 0 ? styles.ingredientRowFirst : null,
                       ]}
                     >
-                      <Text style={styles.ingredientQty}>
-                        {qtyDisplay} {ing.measurement}
+                      <Text style={styles.ingredientQty} numberOfLines={2}>
+                        {qtyDisplay} {abbreviateMeasurement(ing.measurement)}
                       </Text>
                       <Text style={styles.ingredientName}>
-                        {ing.ingredient.name}
+                        {ing.ingredientName}
                       </Text>
                     </View>
                   );
@@ -442,8 +557,9 @@ export function RecipeDetailScreen() {
               onPress={handleMoreRecipes}
               activeOpacity={0.85}
             >
+              <CardGradient />
               <Image
-                source={require("../../../assets/images/ester-logo.png")}
+                source={require("../../../assets/images/ester-avatar-silver.png")}
                 style={styles.moreCtaAvatar}
                 resizeMode="contain"
               />
@@ -732,8 +848,6 @@ const styles = StyleSheet.create({
   esterAvatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: K.bone,
   },
   esterTextWrap: {
     flex: 1,
@@ -745,6 +859,10 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: -0.16,
     color: "#F3EFE3",
+  },
+  esterLoadingText: {
+    opacity: 0.6,
+    fontStyle: "italic",
   },
   // Section
   divider: {
@@ -895,6 +1013,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 12,
     marginTop: 10,
+    overflow: "hidden",
   },
   moreCtaAvatar: {
     width: 96,

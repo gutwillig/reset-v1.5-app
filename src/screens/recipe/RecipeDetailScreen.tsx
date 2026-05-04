@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  Share,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -25,6 +26,9 @@ import {
   getMealDetail,
   getMealIngredients,
   getCachedDailyPlan,
+  addFavorite,
+  removeFavorite,
+  getFavorites,
   MealDetail,
   MealIngredient,
   MealNutrient,
@@ -80,14 +84,23 @@ function computeMicrosPctRollup(nutrients: MealNutrient[] | null): number | null
 
 function parseInstructions(instructions: string | null): string[] {
   if (!instructions) return [];
-  const numbered = instructions.match(/\d+\.\s+[^\n]+/g);
-  if (numbered && numbered.length > 1) {
-    return numbered.map((s) => s.replace(/^\d+\.\s*/, "").trim());
-  }
-  return instructions
-    .split(/\.(?:\s|$)/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 10);
+
+  const normalized = instructions
+    .replace(/\.(?=[A-Za-z])/g, ". ")
+    .replace(/\s*\n\s*/g, " ")
+    .replace(/^\s*Instructions\s*:?\s*/i, " ")
+    .replace(/^\s*Instructions(?=[A-Z])/, " ")
+    .replace(/^\s*\d+\.\s*/gm, " ")
+    .replace(/(?:^|\s)\d+\.\s+/g, " ")
+    .replace(/\bStep\s*\d+\s*:?\s*/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim().replace(/[.!?]+$/, ""))
+    .filter((s) => s.length > 5)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
 }
 
 function CardGradient() {
@@ -154,6 +167,82 @@ function abbreviateMeasurement(measurement: string): string {
   if (!measurement) return "";
   const lower = measurement.trim().toLowerCase();
   return UNIT_ABBREVIATIONS[lower] ?? measurement;
+}
+
+const WHOLE_PIECE_UNITS = new Set([
+  "",
+  "egg",
+  "eggs",
+  "piece",
+  "pieces",
+  "slice",
+  "slices",
+  "clove",
+  "cloves",
+  "head",
+  "heads",
+  "leaf",
+  "leaves",
+  "stalk",
+  "stalks",
+  "stick",
+  "sticks",
+  "sprig",
+  "sprigs",
+  "can",
+  "cans",
+  "bottle",
+  "bottles",
+  "jar",
+  "jars",
+  "package",
+  "packages",
+  "packet",
+  "packets",
+  "small",
+  "medium",
+  "large",
+  "serving",
+  "servings",
+]);
+
+const FRACTION_STOPS: Array<{ value: number; glyph: string }> = [
+  { value: 0, glyph: "" },
+  { value: 1 / 8, glyph: "⅛" },
+  { value: 1 / 4, glyph: "¼" },
+  { value: 1 / 3, glyph: "⅓" },
+  { value: 3 / 8, glyph: "⅜" },
+  { value: 1 / 2, glyph: "½" },
+  { value: 5 / 8, glyph: "⅝" },
+  { value: 2 / 3, glyph: "⅔" },
+  { value: 3 / 4, glyph: "¾" },
+  { value: 7 / 8, glyph: "⅞" },
+  { value: 1, glyph: "" },
+];
+
+function formatQty(qty: number, measurement: string): string {
+  if (!isFinite(qty) || qty <= 0) return "0";
+  const unit = (measurement || "").trim().toLowerCase();
+  if (WHOLE_PIECE_UNITS.has(unit)) {
+    return Math.max(1, Math.round(qty)).toString();
+  }
+  if (qty >= 10) return Math.round(qty).toString();
+
+  const intPart = Math.floor(qty);
+  const fracPart = qty - intPart;
+  let best = FRACTION_STOPS[0];
+  let bestDelta = 1;
+  for (const stop of FRACTION_STOPS) {
+    const delta = Math.abs(fracPart - stop.value);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = stop;
+    }
+  }
+  if (best.value === 1) return (intPart + 1).toString();
+  if (best.value === 0) return intPart > 0 ? intPart.toString() : "0";
+  if (intPart === 0) return best.glyph;
+  return `${intPart} ${best.glyph}`;
 }
 
 function renderBoldSegments(text: string): React.ReactNode[] {
@@ -223,6 +312,7 @@ export function RecipeDetailScreen() {
   const [servings, setServings] = useState<number>(1);
   const [esterText, setEsterText] = useState<string | null>(null);
   const [esterLoading, setEsterLoading] = useState(true);
+  const [isFavorited, setIsFavorited] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -291,8 +381,42 @@ export function RecipeDetailScreen() {
     };
   }, [meal.id, meal.time, siblings.length]);
 
+  useEffect(() => {
+    let cancelled = false;
+    getFavorites()
+      .then((favs) => {
+        if (cancelled) return;
+        setIsFavorited(favs.some((f) => f.id === meal.id));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [meal.id]);
+
   const handleClose = () => {
     navigation.dispatch(CommonActions.goBack());
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${meal.name} — recommended by Ester on Reset`,
+      });
+    } catch {
+      // Cancelled or share failed silently
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    const next = !isFavorited;
+    setIsFavorited(next);
+    try {
+      if (next) await addFavorite(meal.id);
+      else await removeFavorite(meal.id);
+    } catch {
+      setIsFavorited(!next);
+    }
   };
 
   const handleMoreRecipes = () => {
@@ -508,10 +632,7 @@ export function RecipeDetailScreen() {
                 {ingredients.map((ing, idx) => {
                   const scale = servingsBase > 0 ? servings / servingsBase : 1;
                   const qty = ing.quantity * scale;
-                  const qtyDisplay =
-                    qty >= 10
-                      ? Math.round(qty).toString()
-                      : qty.toFixed(qty < 1 ? 2 : 1).replace(/\.0+$/, "");
+                  const qtyDisplay = formatQty(qty, ing.measurement);
                   return (
                     <View
                       key={ing.id + idx}
@@ -593,12 +714,31 @@ export function RecipeDetailScreen() {
             <Text style={styles.headerCloseGlyph}>✕</Text>
           </TouchableOpacity>
           <View style={styles.headerRightActions}>
-            <View style={styles.headerActionButton}>
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              onPress={handleShare}
+              hitSlop={8}
+              accessibilityLabel="Share recipe"
+            >
               <Text style={styles.headerActionGlyph}>↗</Text>
-            </View>
-            <View style={styles.headerActionButton}>
-              <Text style={styles.headerActionGlyph}>♡</Text>
-            </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              onPress={handleToggleFavorite}
+              hitSlop={8}
+              accessibilityLabel={
+                isFavorited ? "Remove from favorites" : "Save to favorites"
+              }
+            >
+              <Text
+                style={[
+                  styles.headerActionGlyph,
+                  isFavorited && styles.headerActionGlyphActive,
+                ]}
+              >
+                {isFavorited ? "♥" : "♡"}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </SafeAreaView>
@@ -1095,6 +1235,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: K.brown,
     fontFamily: fonts.dmSans,
+  },
+  headerActionGlyphActive: {
+    color: "#E25C5C",
   },
   // Loading
   loadingOverlay: {

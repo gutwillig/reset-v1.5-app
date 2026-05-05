@@ -2,6 +2,7 @@ import {
   initialize,
   deinitialize,
   getMeasurementResults,
+  getHealthRisks,
   getMeasurementState,
   getMeasurementProgressPercentage,
   getFaceState as sdkGetFaceState,
@@ -16,6 +17,7 @@ import {
   FaceState as SdkFaceState,
   MeasurementState as SdkMeasurementState,
   type MeasurementResults,
+  type HealthRisks,
 } from "react-native-shenai-sdk";
 
 export interface ScanResults {
@@ -30,6 +32,11 @@ export interface ScanResults {
   cardiacWorkload: number | null;
   ageEstimate: number | null;
   signalQuality: number;
+  bmi: number | null;
+  weightKg: number | null;
+  heightCm: number | null;
+  vascularAge: number | null;
+  wellnessScore: number | null;
 }
 
 export type FaceState =
@@ -50,7 +57,10 @@ function r1(v: number | null | undefined): number | null {
   return v != null ? Math.round(v) : null;
 }
 
-export function mapSdkResults(raw: MeasurementResults): ScanResults {
+export function mapSdkResults(
+  raw: MeasurementResults,
+  health?: HealthRisks | null,
+): ScanResults {
   return {
     heartRate: Math.round(raw.heartRateBpm),
     stressIndex: r1(raw.stressIndex),
@@ -63,6 +73,11 @@ export function mapSdkResults(raw: MeasurementResults): ScanResults {
     cardiacWorkload: r1(raw.cardiacWorkloadMmhgPerSec),
     ageEstimate: r1(raw.ageYears),
     signalQuality: raw.averageSignalQuality,
+    bmi: r1(raw.bmiKgPerM2),
+    weightKg: r1(raw.weightKg),
+    heightCm: r1(raw.heightCm),
+    vascularAge: r1(health?.vascularAge ?? null),
+    wellnessScore: r1(health?.wellnessScore ?? null),
   };
 }
 
@@ -89,6 +104,8 @@ export async function initShenAI(apiKey: string): Promise<void> {
     showDisclaimer: false,
     onboardingMode: OnboardingMode.HIDDEN,
     operatingMode: OperatingMode.POSITIONING,
+    enableHealthRisks: true,
+    saveHealthRisksFactors: true,
   });
 
   // InitializationResult.OK === 0
@@ -117,7 +134,13 @@ export async function shutdownShenAI(): Promise<void> {
 export async function getScanResults(): Promise<ScanResults | null> {
   const raw = await getMeasurementResults();
   if (!raw) return null;
-  return mapSdkResults(raw);
+  let health: HealthRisks | null = null;
+  try {
+    health = await getHealthRisks();
+  } catch {
+    // SDK may throw if HealthRisks aren't configured; fall back to nulls.
+  }
+  return mapSdkResults(raw, health);
 }
 
 const FACE_STATE_MAP: Record<number, FaceState> = {

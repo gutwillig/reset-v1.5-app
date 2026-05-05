@@ -93,21 +93,41 @@ const FAILURE_MESSAGES: Record<FailureInfo["type"], string> = {
 };
 
 function deriveBiometrics(results: ScanResults) {
-  const parasympathetic = results.parasympatheticActivity ?? 50;
-  const hrvSdnn = results.hrvSdnn ?? 40;
-  const wellness = Math.round(
-    Math.min(100, Math.max(0, parasympathetic * 0.6 + (hrvSdnn / 80) * 40)),
-  );
+  // Prefer the real SDK HealthRisks output. Fall back to the legacy local
+  // derivations only when the SDK didn't return them (e.g., HealthRisks
+  // disabled, missing factors).
+  const wellness =
+    results.wellnessScore ??
+    Math.round(
+      Math.min(
+        100,
+        Math.max(
+          0,
+          (results.parasympatheticActivity ?? 50) * 0.6 +
+            ((results.hrvSdnn ?? 40) / 80) * 40,
+        ),
+      ),
+    );
 
-  const vascularAge = results.ageEstimate
-    ? Math.round(results.ageEstimate - 30)
-    : Math.floor(Math.random() * 6) + 2;
+  // SDK vascularAge is the absolute estimated vascular age in years; we
+  // display the offset above the user's chronological estimate.
+  let vascularAgeOffset: number;
+  if (
+    typeof results.vascularAge === "number" &&
+    typeof results.ageEstimate === "number"
+  ) {
+    vascularAgeOffset = Math.max(0, results.vascularAge - results.ageEstimate);
+  } else if (results.ageEstimate) {
+    vascularAgeOffset = Math.max(0, Math.round(results.ageEstimate - 30));
+  } else {
+    vascularAgeOffset = Math.floor(Math.random() * 6) + 2;
+  }
 
   return {
     stressIndex: results.stressIndex ?? 65,
     heartRate: results.heartRate,
     wellness,
-    vascularAge: Math.max(0, vascularAge),
+    vascularAge: vascularAgeOffset,
     raw: results,
   };
 }

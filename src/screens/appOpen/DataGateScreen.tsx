@@ -85,7 +85,7 @@ export function DataGateScreen() {
   };
 
   const swipeHandlers = useSwipeToAdvance({
-    axis: "horizontal",
+    axis: "down",
     onAdvance: handleSkipToMeals,
     enabled: ready && (debugForceShow || !isFresh),
   });

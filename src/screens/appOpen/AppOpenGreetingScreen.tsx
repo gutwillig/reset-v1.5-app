@@ -137,7 +137,7 @@ export function AppOpenGreetingScreen() {
       : 0;
 
   const swipeHandlers = useSwipeToAdvance({
-    axis: "horizontal",
+    axis: "down",
     onAdvance: () => navigation.navigate("DataGate"),
   });
 

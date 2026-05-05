@@ -49,7 +49,7 @@ export function ScoreRevealScreen() {
   };
 
   const swipeHandlers = useSwipeToAdvance({
-    axis: "horizontal",
+    axis: "down",
     onAdvance: exitToHome,
   });
 

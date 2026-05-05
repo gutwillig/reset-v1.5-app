@@ -40,7 +40,7 @@ export function EncourageScanScreen() {
   };
 
   const swipeHandlers = useSwipeToAdvance({
-    axis: "horizontal",
+    axis: "down",
     onAdvance: handleSkip,
   });
 

@@ -1,5 +1,12 @@
 import React from "react";
-import { View, Text, StyleSheet, Share, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Share,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { K, TC } from "../../constants/colors";
@@ -62,7 +69,11 @@ export function ShareScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <EsterBubble message="This is your metabolic type. Want to share it?" />
 
         {/* Share card preview */}
@@ -114,7 +125,7 @@ export function ShareScreen({ navigation }: Props) {
             <Text style={styles.shareLabel}>Message</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
 
       <View style={styles.bottom}>
         <Button title="Share" onPress={handleShare} />
@@ -131,19 +142,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: K.cream,
   },
-  content: {
+  scroll: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     padding: 24,
+    paddingBottom: 16,
     alignItems: "center",
   },
   shareCard: {
     width: "85%",
-    aspectRatio: 0.7,
+    aspectRatio: 0.72,
     borderRadius: 24,
     padding: 28,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 28,
+    marginTop: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.15,
@@ -186,7 +201,8 @@ const styles = StyleSheet.create({
   shareButtons: {
     flexDirection: "row",
     gap: 32,
-    marginTop: 28,
+    marginTop: 16,
+    marginBottom: 8,
   },
   shareOption: {
     alignItems: "center",
@@ -209,7 +225,7 @@ const styles = StyleSheet.create({
   },
   bottom: {
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 24,
     alignItems: "center",
     gap: 12,
   },

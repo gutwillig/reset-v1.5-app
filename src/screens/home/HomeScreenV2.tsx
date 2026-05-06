@@ -244,6 +244,7 @@ export function HomeScreenV2() {
           trendDelta={trendDelta}
           onScanAgain={handleScanAgain}
           onExplain={handleExplainScore}
+          onCheckIn={handleStartCheckIn}
         />
 
         <ConfidenceCard confidence={confidence} daysToFull={daysToFullConfidence} />

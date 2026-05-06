@@ -18,6 +18,7 @@ interface ScoreCardProps {
   trendDelta?: number | null;
   onScanAgain: () => void;
   onExplain?: () => void;
+  onCheckIn?: () => void;
 }
 
 const RING_MAX_WIDTH = 320;
@@ -107,6 +108,7 @@ export function ScoreCard({
   trendDelta = null,
   onScanAgain,
   onExplain,
+  onCheckIn,
 }: ScoreCardProps) {
   const { nestedBg, textColor, subtleText, evening } = useAppPalette();
   const { width: windowWidth } = useWindowDimensions();
@@ -126,10 +128,12 @@ export function ScoreCard({
             Today's Reset Score
           </Text>
           <Text style={[styles.mood, { color: subtleText }]}>
-            {scoreMood(displayedScore)}
+            {hasScore
+              ? scoreMood(displayedScore)
+              : "Waiting on today's signal."}
           </Text>
         </View>
-        {trendDelta !== null && trendDelta !== undefined ? (
+        {hasScore && trendDelta !== null && trendDelta !== undefined ? (
           <View style={styles.trend}>
             <Text style={[styles.trendArrow, { color: K.ochre }]}>
               {trendDelta >= 0 ? "▲" : "▼"}
@@ -141,15 +145,27 @@ export function ScoreCard({
         ) : null}
       </View>
 
-      <View style={styles.ringWrap}>
-        <ScoreRing
-          score={displayedScore}
-          animate={false}
-          width={ringWidth}
-          numberColor={accent}
-          needleColor={accent}
-        />
-      </View>
+      {hasScore ? (
+        <View style={styles.ringWrap}>
+          <ScoreRing
+            score={displayedScore}
+            animate={false}
+            width={ringWidth}
+            numberColor={accent}
+            needleColor={accent}
+          />
+        </View>
+      ) : (
+        <View style={styles.emptyWrap}>
+          <Text style={[styles.emptyTitle, { color: textColor }]}>
+            No score yet today
+          </Text>
+          <Text style={[styles.emptyBody, { color: subtleText }]}>
+            Take a quick scan or check in below and I'll have a read on you in
+            seconds.
+          </Text>
+        </View>
+      )}
 
       <View style={styles.actions}>
         <TouchableOpacity
@@ -159,7 +175,7 @@ export function ScoreCard({
         >
           <Text style={[styles.btnPrimaryText]}>Scan Again</Text>
         </TouchableOpacity>
-        {onExplain ? (
+        {hasScore && onExplain ? (
           <TouchableOpacity
             style={[styles.btn, styles.btnPrimary]}
             onPress={onExplain}
@@ -169,16 +185,28 @@ export function ScoreCard({
             <Text style={[styles.btnPrimaryText]}>View Insights</Text>
           </TouchableOpacity>
         ) : null}
+        {!hasScore && onCheckIn ? (
+          <TouchableOpacity
+            style={[styles.btn, styles.btnPrimary]}
+            onPress={onCheckIn}
+            activeOpacity={0.85}
+            accessibilityLabel="Check in"
+          >
+            <Text style={[styles.btnPrimaryText]}>Check In</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
-      <View style={styles.timestampWrap}>
-        <Text style={[styles.timestamp, { color: subtleText }]}>
-          {formatScanLine(latestScanAt)}
-        </Text>
-        <Text style={[styles.timestamp, { color: subtleText }]}>
-          {formatCheckInLine(latestCheckInAt)}
-        </Text>
-      </View>
+      {hasScore ? (
+        <View style={styles.timestampWrap}>
+          <Text style={[styles.timestamp, { color: subtleText }]}>
+            {formatScanLine(latestScanAt)}
+          </Text>
+          <Text style={[styles.timestamp, { color: subtleText }]}>
+            {formatCheckInLine(latestCheckInAt)}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -231,6 +259,25 @@ const styles = StyleSheet.create({
   ringWrap: {
     alignItems: "center",
     width: "100%",
+  },
+  emptyWrap: {
+    alignItems: "center",
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+  },
+  emptyTitle: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 20,
+    letterSpacing: -0.2,
+    textAlign: "center",
+  },
+  emptyBody: {
+    fontFamily: fonts.dmSans,
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: -0.14,
+    textAlign: "center",
   },
   actions: {
     flexDirection: "row",

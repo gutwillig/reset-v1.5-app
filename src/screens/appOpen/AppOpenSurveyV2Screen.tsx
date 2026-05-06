@@ -12,6 +12,8 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { K } from "../../constants/colors";
 import { submitCheckIn } from "../../services/checkIn";
 import { refreshDailyPlan, cacheDailyPlan } from "../../services/meals";
+import { getProfile } from "../../services/profile";
+import { useApp } from "../../context/AppContext";
 import { SurveyHeader } from "../../components/survey/SurveyHeader";
 import { ContinueButton } from "../../components/survey/ContinueButton";
 import { FeelingSlider } from "../../components/survey/FeelingSlider";
@@ -44,10 +46,23 @@ function sliderToEnergy(value: number): "low" | "okay" | "steady" | "high" {
   return "high";
 }
 
+function isToday(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
 export function AppOpenSurveyV2Screen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppOpenStackParamList>>();
   const insets = useSafeAreaInsets();
+  const { state } = useApp();
 
   const [step, setStep] = useState(1);
   const [feeling, setFeeling] = useState(50);
@@ -93,10 +108,26 @@ export function AppOpenSurveyV2Screen() {
         .then((plan) => cacheDailyPlan(plan))
         .catch(() => {});
     } catch {
-      // Non-blocking: proceed to EncourageScan regardless so the flow completes.
+      // Non-blocking: proceed to next screen regardless so the flow completes.
     } finally {
       setSubmitting(false);
-      navigation.replace("EncourageScan");
+
+      // Skip the "complete a face scan" nudge if the user already has a scan
+      // today. In-session scans are reflected in state.biometrics; persisted
+      // ones land on profile.layer3.latestScan.scannedAt. We check the
+      // in-session value first since it's free, and only call getProfile if
+      // we need to.
+      let scannedToday = !!state.biometrics;
+      if (!scannedToday) {
+        try {
+          const profile = await getProfile();
+          scannedToday = isToday(profile?.layer3?.latestScan?.scannedAt);
+        } catch {
+          scannedToday = false;
+        }
+      }
+
+      navigation.replace(scannedToday ? "ScoreReveal" : "EncourageScan");
     }
   };
 

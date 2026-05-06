@@ -46,7 +46,7 @@ export type MainStackParamList = {
     returnTo?: "ScanResults" | "ScoreReveal";
   };
   ScanResults: undefined;
-  ScanInsights: undefined;
+  ScanInsights: { fromAppOpen?: boolean } | undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, StatusBar } from "react-native";
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -45,12 +45,27 @@ export function ScoreRevealScreen() {
     navigation.replace("NextMeal");
   };
 
+  const handleScanAgain = () => {
+    const parent = navigation.getParent();
+    if (parent) {
+      (parent as any).navigate("Scan", {
+        mode: "rescan",
+        returnTo: "ScoreReveal",
+      });
+    }
+  };
+
+  const handleCheckIn = () => {
+    navigation.replace("SurveyV2");
+  };
+
   const swipeHandlers = useSwipeToAdvance({
     axis: "down",
     onAdvance: advanceToMeal,
   });
 
-  const displayedScore = score ?? 0;
+  const hasScore = score !== null && score > 0;
+  const displayedScore = hasScore ? Math.round(score!) : 0;
   const confidencePct =
     confidence !== null ? Math.max(0, Math.min(100, Math.round(confidence))) : 50;
   const daysToFull =
@@ -59,6 +74,7 @@ export function ScoreRevealScreen() {
       : 0;
 
   const scoreMood = (() => {
+    if (!hasScore) return "Waiting on today's signal.";
     if (displayedScore >= 80) return "Looking good, looking good!";
     if (displayedScore >= 60) return "Trending in the right direction.";
     if (displayedScore >= 40) return "A steady read on you.";
@@ -74,7 +90,9 @@ export function ScoreRevealScreen() {
       <StatusBar barStyle="dark-content" translucent />
 
       <View style={styles.content}>
-        <Text style={styles.heading}>Thanks for checking in.</Text>
+        <Text style={styles.heading}>
+          {hasScore ? "Thanks for checking in." : "Welcome back."}
+        </Text>
 
         <View style={styles.scoreCard}>
           <View style={styles.scoreHeader}>
@@ -84,16 +102,42 @@ export function ScoreRevealScreen() {
             </View>
           </View>
 
-          <View style={styles.ringWrap}>
-            <ScoreRing
-              score={displayedScore}
-              previousScore={
-                trendDelta !== null ? Math.max(0, displayedScore - trendDelta) : undefined
-              }
-            />
-          </View>
+          {hasScore ? (
+            <View style={styles.ringWrap}>
+              <ScoreRing
+                score={displayedScore}
+                previousScore={
+                  trendDelta !== null ? Math.max(0, displayedScore - trendDelta) : undefined
+                }
+              />
+            </View>
+          ) : (
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyTitle}>No score yet today</Text>
+              <Text style={styles.emptyBody}>
+                Take a quick scan or check in below and I'll have a read on you
+                in seconds.
+              </Text>
+              <View style={styles.emptyActions}>
+                <TouchableOpacity
+                  style={styles.emptyBtn}
+                  onPress={handleScanAgain}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.emptyBtnText}>Scan Again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.emptyBtn}
+                  onPress={handleCheckIn}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.emptyBtnText}>Check In</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
-          {trendDelta !== null ? (
+          {hasScore && trendDelta !== null ? (
             <View style={styles.trendWrap}>
               <View style={styles.trendRow}>
                 <Text style={styles.trendArrow}>{trendDelta >= 0 ? "▲" : "▼"}</Text>
@@ -182,6 +226,46 @@ const styles = StyleSheet.create({
   ringWrap: {
     alignItems: "center",
     width: "100%",
+  },
+  emptyWrap: {
+    alignItems: "center",
+    paddingVertical: 24,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 20,
+    letterSpacing: -0.2,
+    color: K.brown,
+    textAlign: "center",
+  },
+  emptyBody: {
+    fontFamily: fonts.dmSans,
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: -0.14,
+    color: K.brown,
+    textAlign: "center",
+  },
+  emptyActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+  },
+  emptyBtn: {
+    minHeight: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: K.white,
+  },
+  emptyBtnText: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 14,
+    color: K.brown,
   },
   trendWrap: {
     alignItems: "center",

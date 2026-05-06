@@ -22,6 +22,7 @@ import {
   type DailyPlanMeal,
   type MealIngredient,
 } from "../../services/meals";
+import { getResetScore } from "../../services/resetScore";
 import { useAppPalette } from "../../hooks/useAppPalette";
 import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
@@ -105,6 +106,17 @@ export function NextMealScreen() {
   const [ingredients, setIngredients] = useState<MealIngredient[]>([]);
   const [feedback, setFeedback] = useState<FeedbackState>("idle");
   const [refreshing, setRefreshing] = useState(false);
+  const [hasScore, setHasScore] = useState(false);
+
+  useEffect(() => {
+    getResetScore()
+      .then((res) => {
+        setHasScore(
+          res.status === "active" && !!res.score && res.score.score > 0,
+        );
+      })
+      .catch(() => setHasScore(false));
+  }, []);
 
   useEffect(() => {
     getDailyPlan()
@@ -144,7 +156,10 @@ export function NextMealScreen() {
     parent?.dispatch(
       CommonActions.reset({
         index: 1,
-        routes: [{ name: "Tabs" }, { name: "ScanInsights" }],
+        routes: [
+          { name: "Tabs" },
+          { name: "ScanInsights", params: { fromAppOpen: true } },
+        ],
       }),
     );
   };
@@ -247,7 +262,9 @@ export function NextMealScreen() {
 
               <Text style={[styles.intro, { color: textColor }]}>
                 {meal?.whyLine
-                  ? `Based on your recent score, I picked this for you. ${meal.whyLine}`
+                  ? hasScore
+                    ? `Based on your recent score, I picked this for you. ${meal.whyLine}`
+                    : `I picked this one out for you. ${meal.whyLine}`
                   : "This meal just came across my desk. I think you'd love it — want to add it to the rotation?"}
               </Text>
 

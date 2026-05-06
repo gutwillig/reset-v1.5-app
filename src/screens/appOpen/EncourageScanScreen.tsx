@@ -8,20 +8,45 @@ import { fonts } from "../../constants/typography";
 import { SurveyHeader } from "../../components/survey/SurveyHeader";
 import { ContinueButton } from "../../components/survey/ContinueButton";
 import { getProfile } from "../../services/profile";
+import { useApp } from "../../context/AppContext";
 import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
+
+function isToday(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
 
 export function EncourageScanScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppOpenStackParamList>>();
   const insets = useSafeAreaInsets();
+  const { state } = useApp();
   const [confidence, setConfidence] = useState<number | null>(null);
 
   useEffect(() => {
+    // If the user has already scanned today, skip the nudge entirely.
+    if (state.biometrics) {
+      navigation.replace("ScoreReveal");
+      return;
+    }
     getProfile()
-      .then((p) => setConfidence(p?.confidence?.composite ?? null))
+      .then((p) => {
+        if (isToday(p?.layer3?.latestScan?.scannedAt)) {
+          navigation.replace("ScoreReveal");
+          return;
+        }
+        setConfidence(p?.confidence?.composite ?? null);
+      })
       .catch(() => {});
-  }, []);
+  }, [navigation, state.biometrics]);
 
   const exitToHome = () => {
     const parent = navigation.getParent();

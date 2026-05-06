@@ -11,8 +11,9 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import { K } from "../../constants/colors";
 import { fonts } from "../../constants/typography";
 import { useApp } from "../../context/AppContext";
@@ -162,6 +163,8 @@ function TrendIcon({ direction }: { direction: "up" | "down" | "same" }) {
 export function ScanInsightsScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<MainStackParamList>>();
+  const route = useRoute<RouteProp<MainStackParamList, "ScanInsights">>();
+  const fromAppOpen = !!route.params?.fromAppOpen;
   const insets = useSafeAreaInsets();
   const { state } = useApp();
   const { innerBg, nestedBg, textColor, subtleText, statusBarStyle } =
@@ -246,6 +249,7 @@ export function ScanInsightsScreen() {
   // change. Ties go to scan since a same-day scan is the higher-fidelity read.
   const lastScanAt = profile?.layer3?.latestScan?.scannedAt ?? null;
   const lastCheckInAt = checkIns[0]?.date ?? null;
+  const hasAnyData = !!currentSource || !!lastCheckInAt;
   const mode: "scan" | "survey" = (() => {
     if (lastCheckInAt && !lastScanAt) return "survey";
     if (lastCheckInAt && lastScanAt) {
@@ -299,9 +303,25 @@ export function ScanInsightsScreen() {
     : null;
 
   const handleClose = () => navigation.goBack();
+  const advanceToHome = () => {
+    if (navigation.canGoBack()) navigation.goBack();
+  };
+  const swipeHandlers = useSwipeToAdvance({
+    axis: "down",
+    onAdvance: advanceToHome,
+  });
+  const handleScanAgain = () => {
+    navigation.navigate("Scan", { mode: "rescan", returnTo: "ScoreReveal" });
+  };
+  const handleCheckIn = () => {
+    (navigation as any).navigate("AppOpenFlow", { screen: "SurveyV2" });
+  };
 
   return (
-    <View style={[styles.root, { backgroundColor: innerBg }]}>
+    <View
+      style={[styles.root, { backgroundColor: innerBg }]}
+      {...(fromAppOpen ? swipeHandlers : {})}
+    >
       <StatusBar barStyle={statusBarStyle} translucent />
       <SafeAreaView
         edges={["top"]}
@@ -319,7 +339,11 @@ export function ScanInsightsScreen() {
 
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: textColor }]}>
-              {mode === "survey" ? "Check-in Insights" : "Scan Insights"}
+              {!hasAnyData
+                ? "Insights"
+                : mode === "survey"
+                ? "Check-in Insights"
+                : "Scan Insights"}
             </Text>
           </View>
 
@@ -350,7 +374,12 @@ export function ScanInsightsScreen() {
               resizeMode="contain"
             />
             <View style={styles.esterTextWrap}>
-              {blurbLoading ? (
+              {!hasAnyData ? (
+                <Text style={[styles.esterText, { color: textColor }]}>
+                  Once you scan or check in, this is where I'll break down what
+                  your signals are saying.
+                </Text>
+              ) : blurbLoading ? (
                 <View style={styles.esterLoadingRow}>
                   <ActivityIndicator size="small" color={textColor} />
                   <Text style={[styles.esterLoadingText, { color: subtleText }]}>
@@ -366,7 +395,33 @@ export function ScanInsightsScreen() {
           </View>
         </View>
 
-        {mode === "survey" ? (
+        {!hasAnyData ? (
+          <View style={[styles.emptyCard, { backgroundColor: nestedBg }]}>
+            <Text style={[styles.emptyTitle, { color: textColor }]}>
+              No score yet today
+            </Text>
+            <Text style={[styles.emptyBody, { color: subtleText }]}>
+              Take a quick scan or check in and I'll have a read on you in
+              seconds.
+            </Text>
+            <View style={styles.emptyActions}>
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={handleScanAgain}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.emptyBtnText}>Scan Again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={handleCheckIn}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.emptyBtnText}>Check In</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : mode === "survey" ? (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: textColor }]}>
               About today's check-in
@@ -448,6 +503,24 @@ export function ScanInsightsScreen() {
           </View>
         )}
       </ScrollView>
+
+      {fromAppOpen ? (
+        <TouchableOpacity
+          style={[
+            styles.advanceButton,
+            {
+              bottom: insets.bottom + 16,
+              backgroundColor: innerBg,
+              borderColor: textColor,
+            },
+          ]}
+          onPress={advanceToHome}
+          activeOpacity={0.8}
+          accessibilityLabel="Continue to home"
+        >
+          <Text style={[styles.advanceArrow, { color: textColor }]}>↓</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -728,5 +801,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: -0.14,
     color: K.sub,
+  },
+  emptyCard: {
+    backgroundColor: K.bone,
+    borderRadius: 4,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    gap: 8,
+  },
+  emptyTitle: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 20,
+    letterSpacing: -0.2,
+    color: K.brown,
+    textAlign: "center",
+  },
+  emptyBody: {
+    fontFamily: fonts.dmSans,
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: -0.14,
+    color: K.sub,
+    textAlign: "center",
+  },
+  emptyActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+  },
+  emptyBtn: {
+    minHeight: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: K.white,
+  },
+  emptyBtnText: {
+    fontFamily: fonts.dmSansBold,
+    fontSize: 14,
+    color: K.brown,
+  },
+  advanceButton: {
+    position: "absolute",
+    right: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  advanceArrow: {
+    fontSize: 22,
+    fontWeight: "400",
   },
 });

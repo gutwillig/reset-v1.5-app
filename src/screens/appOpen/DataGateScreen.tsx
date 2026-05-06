@@ -50,7 +50,7 @@ export function DataGateScreen() {
 
   useEffect(() => {
     if (ready && isFresh && !debugForceShow) {
-      navigation.replace("NextMeal");
+      navigation.replace("ScoreReveal");
     }
   }, [ready, isFresh, debugForceShow, navigation]);
 
@@ -80,13 +80,13 @@ export function DataGateScreen() {
     );
   };
 
-  const handleSkipToMeals = () => {
-    navigation.replace("NextMeal");
+  const handleSkipToScore = () => {
+    navigation.replace("ScoreReveal");
   };
 
   const swipeHandlers = useSwipeToAdvance({
     axis: "down",
-    onAdvance: handleSkipToMeals,
+    onAdvance: handleSkipToScore,
     enabled: ready && (debugForceShow || !isFresh),
   });
 
@@ -168,11 +168,11 @@ export function DataGateScreen() {
 
               <TouchableOpacity
                 style={[styles.skipPill, { borderColor }]}
-                onPress={handleSkipToMeals}
+                onPress={handleSkipToScore}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.skipLabel, { color: subtleText }]}>
-                  Skip to meal recommendations →
+                  Skip to my score →
                 </Text>
               </TouchableOpacity>
 

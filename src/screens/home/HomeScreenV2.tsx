@@ -240,6 +240,7 @@ export function HomeScreenV2() {
         <ScoreCard
           score={score}
           latestScanAt={latestScanAt}
+          latestCheckInAt={checkInHistory[0]?.createdAt ?? checkInHistory[0]?.date ?? null}
           trendDelta={trendDelta}
           onScanAgain={handleScanAgain}
           onExplain={handleExplainScore}

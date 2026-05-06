@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, StatusBar } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, CommonActions } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { K } from "../../constants/colors";
 import { fonts, spacing } from "../../constants/typography";
@@ -41,16 +41,13 @@ export function ScoreRevealScreen() {
       .catch(() => {});
   }, []);
 
-  const exitToHome = () => {
-    const parent = navigation.getParent();
-    parent?.dispatch(
-      CommonActions.reset({ index: 0, routes: [{ name: "Tabs" }] }),
-    );
+  const advanceToMeal = () => {
+    navigation.replace("NextMeal");
   };
 
   const swipeHandlers = useSwipeToAdvance({
     axis: "down",
-    onAdvance: exitToHome,
+    onAdvance: advanceToMeal,
   });
 
   const displayedScore = score ?? 0;
@@ -128,7 +125,7 @@ export function ScoreRevealScreen() {
       </View>
 
       <View style={[styles.footer, { bottom: insets.bottom + 16 }]}>
-        <ContinueButton label="Finish check in" onPress={exitToHome} />
+        <ContinueButton label="See today's meal" onPress={advanceToMeal} />
       </View>
     </SafeAreaView>
   );

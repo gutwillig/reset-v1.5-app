@@ -39,6 +39,9 @@ export async function getTodayCheckIn() {
 export interface CheckInEntry {
   id: string;
   date: string;
+  // ISO datetime when the check-in was submitted; preferred over `date` for
+  // display because `date` is YYYY-MM-DD only.
+  createdAt?: string;
   energy: string;
   stressTags: string[];
   sleepHours: number | null;

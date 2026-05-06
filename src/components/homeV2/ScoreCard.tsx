@@ -14,6 +14,7 @@ import { ScoreRing } from "../survey/ScoreRing";
 interface ScoreCardProps {
   score: number | null;
   latestScanAt: string | null;
+  latestCheckInAt?: string | null;
   trendDelta?: number | null;
   onScanAgain: () => void;
   onExplain?: () => void;
@@ -30,10 +31,18 @@ function scoreMood(score: number): string {
   return "We're still getting to know you.";
 }
 
-function formatLastScan(iso: string | null): string {
-  if (!iso) return "No scan yet";
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function relativeDateTimeLabel(iso: string | null): string | null {
+  if (!iso) return null;
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "No scan yet";
+  if (Number.isNaN(date.getTime())) return null;
 
   const now = new Date();
   const time = date
@@ -41,30 +50,60 @@ function formatLastScan(iso: string | null): string {
     .toLowerCase()
     .replace(/\s/g, "");
 
-  const sameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
-  if (sameDay) return `Last scan: Today at ${time}`;
+  if (isSameLocalDay(date, now)) return `Today at ${time}`;
 
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  const isYesterday =
-    date.getFullYear() === yesterday.getFullYear() &&
-    date.getMonth() === yesterday.getMonth() &&
-    date.getDate() === yesterday.getDate();
-  if (isYesterday) return `Last scan: Yesterday at ${time}`;
+  if (isSameLocalDay(date, yesterday)) return `Yesterday at ${time}`;
 
   const dateLabel = date.toLocaleDateString([], {
     month: "short",
     day: "numeric",
   });
-  return `Last scan: ${dateLabel} at ${time}`;
+  return `${dateLabel} at ${time}`;
+}
+
+// For YYYY-MM-DD date strings (no time component). Parsing those with
+// `new Date(iso)` interprets them as UTC midnight, which shifts a day backward
+// in any timezone west of UTC — so a same-day check-in shows as "yesterday".
+// Build the Date from local components instead, and never render a time.
+function relativeDateOnlyLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  if (Number.isNaN(date.getTime())) return null;
+
+  const now = new Date();
+  if (isSameLocalDay(date, now)) return "Today";
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameLocalDay(date, yesterday)) return "Yesterday";
+
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function formatScanLine(iso: string | null): string {
+  const label = relativeDateTimeLabel(iso);
+  return label ? `Last scan: ${label}` : "No scan recently";
+}
+
+function formatCheckInLine(iso: string | null | undefined): string {
+  // Prefer the timeful formatter when we have a full ISO datetime (the entity's
+  // createdAt). Fall back to date-only when only `YYYY-MM-DD` is available.
+  const hasTime = !!iso && iso.includes("T");
+  const label = hasTime
+    ? relativeDateTimeLabel(iso ?? null)
+    : relativeDateOnlyLabel(iso);
+  return label ? `Last survey: ${label}` : "No survey completed recently";
 }
 
 export function ScoreCard({
   score,
   latestScanAt,
+  latestCheckInAt = null,
   trendDelta = null,
   onScanAgain,
   onExplain,
@@ -79,16 +118,8 @@ export function ScoreCard({
   );
   const accent = evening ? "#B8D0D6" : K.brown;
 
-  const Wrapper: React.ComponentType<any> = onExplain ? TouchableOpacity : View;
-  const wrapperProps = onExplain
-    ? { onPress: onExplain, activeOpacity: 0.9, accessibilityLabel: "Explain my score" }
-    : {};
-
   return (
-    <Wrapper
-      style={[styles.card, { backgroundColor: nestedBg }]}
-      {...wrapperProps}
-    >
+    <View style={[styles.card, { backgroundColor: nestedBg }]}>
       <View style={styles.headerRow}>
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: textColor }]}>
@@ -128,12 +159,27 @@ export function ScoreCard({
         >
           <Text style={[styles.btnPrimaryText]}>Scan Again</Text>
         </TouchableOpacity>
+        {onExplain ? (
+          <TouchableOpacity
+            style={[styles.btn, styles.btnPrimary]}
+            onPress={onExplain}
+            activeOpacity={0.85}
+            accessibilityLabel="View insights"
+          >
+            <Text style={[styles.btnPrimaryText]}>View Insights</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
-      <Text style={[styles.timestamp, { color: subtleText }]}>
-        {formatLastScan(latestScanAt)}
-      </Text>
-    </Wrapper>
+      <View style={styles.timestampWrap}>
+        <Text style={[styles.timestamp, { color: subtleText }]}>
+          {formatScanLine(latestScanAt)}
+        </Text>
+        <Text style={[styles.timestamp, { color: subtleText }]}>
+          {formatCheckInLine(latestCheckInAt)}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -207,6 +253,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.dmSansBold,
     fontSize: 14,
     color: K.brown,
+  },
+  timestampWrap: {
+    alignItems: "center",
+    gap: 2,
   },
   timestamp: {
     fontFamily: fonts.dmSans,

@@ -25,7 +25,7 @@ export function AppOpenSurveyScreen() {
   useEffect(() => {
     if (advanceAt === null) return;
     const delay = Math.max(0, advanceAt - Date.now());
-    const id = setTimeout(() => navigation.replace("NextMeal"), delay);
+    const id = setTimeout(() => navigation.replace("EncourageScan"), delay);
     return () => clearTimeout(id);
   }, [advanceAt, navigation]);
 

@@ -17,14 +17,14 @@ import {
   getDailyPlan,
   submitMealFeedback,
   replaceMealInSlot,
+  getMealIngredients,
   type DailyPlan,
   type DailyPlanMeal,
+  type MealIngredient,
 } from "../../services/meals";
 import { useAppPalette } from "../../hooks/useAppPalette";
 import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
-
-const STAR_FILLED = "★";
 
 type FeedbackState = "idle" | "up" | "down";
 
@@ -67,10 +67,29 @@ function pickNextMeal(plan: DailyPlan): { slot: Slot; meal: DailyPlanMeal } | nu
 }
 
 function formatPrep(meal: DailyPlanMeal): string {
+  return meal.prepTime ? `${meal.prepTime} mins` : "";
+}
+
+function formatMacros(meal: DailyPlanMeal): string | null {
   const parts: string[] = [];
-  if (meal.prepTime) parts.push(`${meal.prepTime} mins`);
-  if (meal.primaryProtein) parts.push(meal.primaryProtein);
-  return parts.join(" · ");
+  if (meal.calories) parts.push(`~${Math.round(meal.calories)} cal`);
+  if (meal.protein) parts.push(`${Math.round(meal.protein)}g protein`);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+// Build tag pills from the meal's classification fields. Only surface
+// positively-framed values — "neutral" and "ultra_processed" don't read as
+// helpful selling points on a recommendation card.
+function buildTags(meal: DailyPlanMeal): string[] {
+  const tags: string[] = [];
+  if (meal.inflammatoryIndex === "anti") tags.push("Anti-inflammatory");
+  if (meal.foodQuality === "whole") tags.push("Whole foods");
+  if (meal.cuisineCluster) {
+    tags.push(
+      meal.cuisineCluster.charAt(0).toUpperCase() + meal.cuisineCluster.slice(1),
+    );
+  }
+  return tags.slice(0, 3);
 }
 
 export function NextMealScreen() {
@@ -83,6 +102,7 @@ export function NextMealScreen() {
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [slot, setSlot] = useState<Slot>("breakfast");
   const [meal, setMeal] = useState<DailyPlanMeal | null>(null);
+  const [ingredients, setIngredients] = useState<MealIngredient[]>([]);
   const [feedback, setFeedback] = useState<FeedbackState>("idle");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -101,12 +121,30 @@ export function NextMealScreen() {
       });
   }, []);
 
-  const exitToHome = () => {
+  useEffect(() => {
+    if (!meal?.id) {
+      setIngredients([]);
+      return;
+    }
+    let cancelled = false;
+    getMealIngredients(meal.id)
+      .then((list) => {
+        if (!cancelled) setIngredients(list);
+      })
+      .catch(() => {
+        if (!cancelled) setIngredients([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [meal?.id]);
+
+  const advanceToInsights = () => {
     const parent = navigation.getParent();
     parent?.dispatch(
       CommonActions.reset({
-        index: 0,
-        routes: [{ name: "Tabs" }],
+        index: 1,
+        routes: [{ name: "Tabs" }, { name: "ScanInsights" }],
       }),
     );
   };
@@ -158,10 +196,22 @@ export function NextMealScreen() {
 
   const loading = plan === null && meal === null;
   const prepMeta = meal ? formatPrep(meal) : "";
+  const macrosLine = meal ? formatMacros(meal) : null;
+  const tags = meal ? buildTags(meal) : [];
+  const ingredientsLine =
+    ingredients.length > 0
+      ? ingredients
+          .slice(0, 4)
+          .map((i) =>
+            i.ingredientName.charAt(0).toUpperCase() +
+            i.ingredientName.slice(1),
+          )
+          .join(" · ")
+      : null;
 
   const swipeHandlers = useSwipeToAdvance({
     axis: "down",
-    onAdvance: exitToHome,
+    onAdvance: advanceToInsights,
   });
 
   return (
@@ -196,8 +246,9 @@ export function NextMealScreen() {
               </View>
 
               <Text style={[styles.intro, { color: textColor }]}>
-                This meal just came across my desk. I think you'd love it —
-                want to add it to the rotation?
+                {meal?.whyLine
+                  ? `Based on your recent score, I picked this for you. ${meal.whyLine}`
+                  : "This meal just came across my desk. I think you'd love it — want to add it to the rotation?"}
               </Text>
 
               {loading ? (
@@ -222,19 +273,38 @@ export function NextMealScreen() {
                       <Text style={[styles.recipeName, { color: textColor }]} numberOfLines={2}>
                         {meal.name}
                       </Text>
-                      <Text style={styles.recipeStars}>
-                        {STAR_FILLED.repeat(5)}
-                      </Text>
                       {prepMeta ? (
                         <Text style={[styles.recipeMeta, { color: subtleText }]}>{prepMeta}</Text>
+                      ) : null}
+                      {ingredientsLine ? (
+                        <Text
+                          style={[styles.ingredients, { color: subtleText }]}
+                          numberOfLines={3}
+                        >
+                          {ingredientsLine}
+                        </Text>
                       ) : null}
                     </View>
                   </View>
 
-                  {meal.whyLine ? (
-                    <View style={styles.whyWrap}>
-                      <Text style={[styles.whyLabel, { color: textColor }]}>Why?</Text>
-                      <Text style={[styles.whyText, { color: textColor }]}>{meal.whyLine}</Text>
+                  {macrosLine ? (
+                    <Text style={[styles.macros, { color: textColor }]}>
+                      {macrosLine}
+                    </Text>
+                  ) : null}
+
+                  {tags.length > 0 ? (
+                    <View style={styles.tagsRow}>
+                      {tags.map((tag) => (
+                        <View
+                          key={tag}
+                          style={[styles.tagPill, { backgroundColor: innerBg }]}
+                        >
+                          <Text style={[styles.tagLabel, { color: textColor }]}>
+                            {tag}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
                   ) : null}
 
@@ -309,7 +379,7 @@ export function NextMealScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.arrowButton, { backgroundColor: innerBg, borderColor: textColor }]}
-                onPress={exitToHome}
+                onPress={advanceToInsights}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.arrowIcon, { color: textColor }]}>↓</Text>
@@ -423,29 +493,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: -0.16,
   },
-  recipeStars: {
-    fontFamily: fonts.dmSans,
-    fontSize: 14,
-    color: K.ochre,
-    letterSpacing: 1,
-  },
   recipeMeta: {
     fontFamily: fonts.dmSans,
     fontSize: 13,
     letterSpacing: -0.14,
   },
-  whyWrap: {
+  ingredients: {
+    fontFamily: fonts.dmSans,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: -0.13,
+  },
+  macros: {
+    fontFamily: fonts.dmSansMedium,
+    fontSize: 14,
+    letterSpacing: -0.14,
+  },
+  tagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.xs,
   },
-  whyLabel: {
-    fontFamily: fonts.dmSansBold,
-    fontSize: 14,
+  tagPill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.full,
   },
-  whyText: {
-    fontFamily: fonts.dmSans,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: -0.14,
+  tagLabel: {
+    fontFamily: fonts.dmSansMedium,
+    fontSize: 12,
+    letterSpacing: -0.12,
   },
   feedbackRow: {
     flexDirection: "row",

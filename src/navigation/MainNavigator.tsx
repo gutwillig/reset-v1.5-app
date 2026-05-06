@@ -168,10 +168,6 @@ export function MainNavigator() {
       <Stack.Screen
         name="ScanInsights"
         component={ScanInsightsScreen}
-        options={{
-          presentation: "modal",
-          animation: "slide_from_bottom",
-        }}
       />
     </Stack.Navigator>
   );

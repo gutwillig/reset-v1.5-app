@@ -5,37 +5,17 @@ import { useAppPalette } from "../../hooks/useAppPalette";
 
 interface CheckInCardProps {
   onPress: () => void;
-  onSkip?: () => void;
-  onRemind?: () => void;
 }
 
-export function CheckInCard({ onPress, onSkip, onRemind }: CheckInCardProps) {
-  const { nestedBg, textColor, subtleText } = useAppPalette();
+export function CheckInCard({ onPress }: CheckInCardProps) {
+  const { nestedBg, subtleText } = useAppPalette();
   return (
     <TouchableOpacity
       style={[styles.card, { backgroundColor: nestedBg }]}
       onPress={onPress}
       activeOpacity={0.9}
     >
-      <View style={styles.topRow}>
-        <Text style={[styles.label, { color: subtleText }]}>Today's Entry</Text>
-        <View style={styles.pills}>
-          <TouchableOpacity
-            style={[styles.pill, { borderColor: textColor }]}
-            onPress={onSkip}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.pillLabel, { color: textColor }]}>Skip today</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.pill, { borderColor: textColor }]}
-            onPress={onRemind}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.pillLabel, { color: textColor }]}>Remind Me</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <Text style={[styles.label, { color: subtleText }]}>Today's Entry</Text>
       <View style={styles.promptRow}>
         <Text style={[styles.prompt, { color: subtleText }]}>What went well today?</Text>
         <Text style={[styles.arrow, { color: subtleText }]}>→</Text>
@@ -53,32 +33,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     gap: spacing.xl,
   },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
   label: {
-    flex: 1,
     fontFamily: fonts.dmSans,
     fontSize: 12,
     letterSpacing: -0.12,
-  },
-  pills: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  pill: {
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    minHeight: 32,
-    justifyContent: "center",
-  },
-  pillLabel: {
-    fontFamily: fonts.dmSansBold,
-    fontSize: 14,
   },
   promptRow: {
     flexDirection: "row",

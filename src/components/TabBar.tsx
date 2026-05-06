@@ -7,6 +7,7 @@ import type { MainStackParamList } from "../navigation/MainNavigator";
 import { K } from "../constants/colors";
 import { typography, spacing } from "../constants/typography";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppPalette } from "../hooks/useAppPalette";
 
 const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
   Home: { active: "🏠", inactive: "🏠" },
@@ -16,6 +17,8 @@ const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const stackNavigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
+  const { innerBg, nestedBg, textColor, subtleText, borderColor } =
+    useAppPalette();
 
   const tabs = state.routes.map((route, index) => {
     const { options } = descriptors[route.key];
@@ -47,10 +50,21 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         accessibilityState={isFocused ? { selected: true } : {}}
         accessibilityLabel={typeof label === "string" ? label : route.name}
       >
-        <View style={[styles.iconContainer, isFocused && styles.iconContainerFocused]}>
+        <View
+          style={[
+            styles.iconContainer,
+            isFocused && { backgroundColor: nestedBg },
+          ]}
+        >
           <Text style={[styles.icon, isFocused && styles.iconFocused]}>{icon}</Text>
         </View>
-        <Text style={[styles.label, isFocused && styles.labelFocused]}>
+        <Text
+          style={[
+            styles.label,
+            { color: subtleText },
+            isFocused && { color: textColor, fontWeight: "600" },
+          ]}
+        >
           {typeof label === "string" ? label : route.name}
         </Text>
       </TouchableOpacity>
@@ -70,12 +84,21 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       <View style={styles.esterIconContainer}>
         <Text style={styles.esterIcon}>✦</Text>
       </View>
-      <Text style={styles.label}>Ester</Text>
+      <Text style={[styles.label, { color: subtleText }]}>Ester</Text>
     </TouchableOpacity>
   );
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: innerBg,
+          borderTopColor: borderColor,
+          paddingBottom: Math.max(insets.bottom, 16),
+        },
+      ]}
+    >
       {tabs[0]}
       {esterButton}
       {tabs[1]}

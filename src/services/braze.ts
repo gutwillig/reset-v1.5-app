@@ -6,38 +6,27 @@ try {
   Braze = null;
 }
 
-const noop = () => {};
-
 /**
  * BrazeService — wrapper for all Braze SDK interactions.
  * Never call Braze SDK directly from screens/components — go through this service.
  * Gracefully no-ops when native module is unavailable.
  */
 
-/**
- * Identify a known user. Call after login/register.
- * Merges anonymous braze_id to this external_id.
- */
 export function changeUser(userId: string): void {
   if (!Braze) return;
   Braze.changeUser(userId);
   Braze.requestImmediateDataFlush();
 }
 
-/**
- * Log a custom event with optional properties.
- */
 export function logEvent(
   eventName: string,
   properties?: Record<string, string | number | boolean>,
 ): void {
   if (!Braze) return;
   Braze.logCustomEvent(eventName, properties);
+  Braze.requestImmediateDataFlush?.();
 }
 
-/**
- * Set standard user attributes.
- */
 export function setUserAttributes(attrs: {
   firstName?: string;
   lastName?: string;
@@ -59,9 +48,6 @@ export function setUserAttributes(attrs: {
   }
 }
 
-/**
- * Set a custom string attribute.
- */
 export function setCustomAttribute(
   key: string,
   value: string | number | boolean,
@@ -70,9 +56,6 @@ export function setCustomAttribute(
   Braze.setCustomUserAttribute(key, value);
 }
 
-/**
- * Clear all Braze data on this device. Call on logout.
- */
 export function wipeData(): void {
   if (!Braze) return;
   Braze.wipeData();

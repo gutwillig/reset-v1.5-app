@@ -18,6 +18,7 @@ import { Avatar, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { getProfile, UserProfile } from "../../services/profile";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
+import { logEvent, setCustomAttribute } from "../../services/braze";
 
 type SubscriptionTier = "pro" | "free" | "none";
 
@@ -68,6 +69,7 @@ export function ProfileScreen() {
   }, []);
 
   useEffect(() => {
+    logEvent("profile_main");
     loadProfile();
   }, [loadProfile]);
 
@@ -80,6 +82,12 @@ export function ProfileScreen() {
   // Determine subscription tier
   const tier: SubscriptionTier = (state.biometrics || (profile?.layer3.scanCount ?? 0) > 0) ? "pro" : "free";
   const hasScan = !!state.biometrics || (profile?.layer3.scanCount ?? 0) > 0;
+
+  useEffect(() => {
+    if (!profile) return;
+    setCustomAttribute("metabolic_type", metabolicType);
+    setCustomAttribute("paid_user", tier === "pro");
+  }, [profile, metabolicType, tier]);
 
   // LPD entries from live data
   const lpdEntries = profile && profile.layer2.energyLog.length > 0
@@ -121,6 +129,7 @@ export function ProfileScreen() {
   const energyValue = typeConfig.signals.energy;
 
   const handleResetProfile = () => {
+    logEvent("profile_resetProfileCTA");
     Alert.alert(
       "Reset Profile",
       "This will clear all your data and restart the onboarding process. Are you sure?",
@@ -132,6 +141,7 @@ export function ProfileScreen() {
   };
 
   const handleSettingsPress = () => {
+    logEvent("profile_settingsCTA");
     (navigation as any).navigate("Settings");
   };
 

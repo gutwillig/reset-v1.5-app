@@ -9,6 +9,7 @@ import { ContinueButton } from "../../components/survey/ContinueButton";
 import { ScoreRing } from "../../components/survey/ScoreRing";
 import { getProfile } from "../../services/profile";
 import { getResetScore } from "../../services/resetScore";
+import { setCustomAttribute } from "../../services/braze";
 import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 
@@ -31,6 +32,7 @@ export function ScoreRevealScreen() {
       .then((res) => {
         if (res.status === "active" && res.score) {
           setScore(res.score.score);
+          setCustomAttribute("latest_score", Math.round(res.score.score));
           if (res.score.previousDayScore !== null) {
             setTrendDelta(
               Math.round(res.score.score - res.score.previousDayScore),

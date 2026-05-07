@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { typography } from "../../constants/typography";
 import { TYPE_CONFIGS } from "../../constants/types";
 import { Button, EsterBubble } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { logEvent } from "../../services/braze";
 
 type Props = NativeStackScreenProps<any, "Share">;
 
@@ -44,7 +45,12 @@ export function ShareScreen({ navigation }: Props) {
 
   const biometricHeadline = getBiometricHeadline();
 
+  useEffect(() => {
+    logEvent("onboarding_share");
+  }, []);
+
   const handleShare = async () => {
+    logEvent("onboarding_share_shareCTA");
     try {
       const message = biometricHeadline
         ? `I just discovered I'm "${typeConfig.title}" on Reset! ${biometricHeadline}. Find your type → reset.app`
@@ -60,6 +66,7 @@ export function ShareScreen({ navigation }: Props) {
   };
 
   const handleSkip = () => {
+    logEvent("onboarding_share_skipCTA");
     navigation.navigate("Taste");
   };
 

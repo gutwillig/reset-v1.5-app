@@ -36,6 +36,7 @@ import type {
 } from "../../services/greetings";
 import { useApp } from "../../context/AppContext";
 import { useAppPalette } from "../../hooks/useAppPalette";
+import { logEvent, setCustomAttribute } from "../../services/braze";
 import {
   MealTabsSection,
   HomeHeader,
@@ -93,11 +94,18 @@ export function HomeScreenV2() {
 
       getResetScore()
         .then((res) => {
-          if (res.status === "active" && res.score) setResetScore(res.score);
+          if (res.status === "active" && res.score) {
+            setResetScore(res.score);
+            setCustomAttribute("latest_score", Math.round(res.score.score));
+          }
         })
         .catch(() => {});
     }, []),
   );
+
+  React.useEffect(() => {
+    logEvent("home_main");
+  }, []);
 
   const handleMealPress = useCallback(
     (meal: Meal) => {

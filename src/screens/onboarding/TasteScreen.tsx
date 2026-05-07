@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -7,6 +7,7 @@ import { typography } from "../../constants/typography";
 import { TASTE_CLUSTERS } from "../../constants/types";
 import { EsterBubble, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { logEvent } from "../../services/braze";
 
 type Props = NativeStackScreenProps<any, "Taste">;
 
@@ -14,11 +15,16 @@ export function TasteScreen({ navigation }: Props) {
   const { setTastePreferences } = useApp();
   const [selected, setSelected] = useState<string | null>(null);
 
+  useEffect(() => {
+    logEvent("onboarding_taste");
+  }, []);
+
   const handleSelect = (id: string) => {
     setSelected(id);
   };
 
   const handleContinue = () => {
+    logEvent("onboarding_taste_continueCTA", { selection: selected ?? "none" });
     if (selected) {
       setTastePreferences([selected]);
     } else {
@@ -29,6 +35,7 @@ export function TasteScreen({ navigation }: Props) {
   };
 
   const handleSurprise = () => {
+    logEvent("onboarding_taste_surpriseMeCTA");
     setTastePreferences(["simple"]);
     navigation.navigate("Restrict");
   };

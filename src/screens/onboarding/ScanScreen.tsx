@@ -29,6 +29,13 @@ import {
   type ScanResults,
   type FaceState,
 } from "../../services/shenai";
+import { logEvent } from "../../services/braze";
+
+const SCAN_PHASE_EVENTS = [
+  "onboarding_scan_phase_aligning",
+  "onboarding_scan_phase_reading",
+  "onboarding_scan_phase_mapping",
+] as const;
 
 type Props = NativeStackScreenProps<any, "Scan"> & {
   route: {
@@ -181,6 +188,11 @@ export function ScanScreen({ navigation, route }: Props) {
     return () => loop.stop();
   }, [heartRate]);
 
+  useEffect(() => {
+    logEvent("onboarding_scan");
+    logEvent(SCAN_PHASE_EVENTS[0]);
+  }, []);
+
   // Initialize SDK on mount
   useEffect(() => {
     let cancelled = false;
@@ -317,6 +329,7 @@ export function ScanScreen({ navigation, route }: Props) {
         if (progress >= 66 && phase < 2) {
           setPhase(2);
           setShowMarkers(true);
+          logEvent(SCAN_PHASE_EVENTS[2]);
           Animated.timing(markerFadeAnim, {
             toValue: 1,
             duration: 500,
@@ -324,6 +337,7 @@ export function ScanScreen({ navigation, route }: Props) {
           }).start();
         } else if (progress >= 16 && phase < 1) {
           setPhase(1);
+          logEvent(SCAN_PHASE_EVENTS[1]);
         }
 
         // Poll live heart rate
@@ -406,6 +420,7 @@ export function ScanScreen({ navigation, route }: Props) {
       console.log("[ShenAI] Biometrics derived, navigating...");
       setBiometrics(biometrics);
       setScreenState("complete");
+      logEvent("onboarding_scan_completed");
 
       setTimeout(async () => {
         await shutdownShenAI();

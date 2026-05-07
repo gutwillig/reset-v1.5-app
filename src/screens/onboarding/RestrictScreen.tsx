@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -7,12 +7,17 @@ import { typography } from "../../constants/typography";
 import { DIETARY_RESTRICTIONS } from "../../constants/types";
 import { EsterBubble, Pill, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { logEvent } from "../../services/braze";
 
 type Props = NativeStackScreenProps<any, "Restrict">;
 
 export function RestrictScreen({ navigation }: Props) {
   const { setDietaryRestrictions } = useApp();
   const [selected, setSelected] = useState<string[]>([]);
+
+  useEffect(() => {
+    logEvent("onboarding_restrict");
+  }, []);
 
   const toggleOption = (id: string) => {
     if (id === "none") {
@@ -29,6 +34,9 @@ export function RestrictScreen({ navigation }: Props) {
   };
 
   const handleContinue = () => {
+    logEvent("onboarding_restrict_continueCTA", {
+      restrictions: selected.join(",") || "none",
+    });
     setDietaryRestrictions(selected);
     navigation.navigate("Account");
   };

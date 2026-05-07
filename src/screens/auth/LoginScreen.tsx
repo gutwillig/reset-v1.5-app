@@ -17,6 +17,7 @@ import { typography } from "../../constants/typography";
 import { Button } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { loginWithEmail, loginWithApple, loginWithGoogle } from "../../services/auth";
+import { logEvent } from "../../services/braze";
 
 import Constants from "expo-constants";
 
@@ -41,6 +42,7 @@ export function LoginScreen() {
   const [appleAvailable, setAppleAvailable] = useState(Platform.OS === "ios");
 
   React.useEffect(() => {
+    logEvent("auth_login");
     if (Platform.OS === "ios") {
       AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
     }
@@ -49,6 +51,7 @@ export function LoginScreen() {
   const isValid = email.includes("@") && password.length >= 1;
 
   const handleLogin = async () => {
+    logEvent("auth_login_signInCTA");
     setError(null);
     setIsLoading(true);
     try {
@@ -62,6 +65,7 @@ export function LoginScreen() {
   };
 
   const handleAppleSignIn = async () => {
+    logEvent("auth_login_appleSignInCTA");
     setError(null);
     setIsLoading(true);
     try {
@@ -109,6 +113,7 @@ export function LoginScreen() {
   };
 
   const handleStartOver = () => {
+    logEvent("auth_login_startOverCTA");
     resetState();
   };
 

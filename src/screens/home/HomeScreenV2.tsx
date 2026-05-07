@@ -109,6 +109,7 @@ export function HomeScreenV2() {
 
   const handleMealPress = useCallback(
     (meal: Meal) => {
+      logEvent("home_meal_recipeCTA", { mealId: meal.id });
       navigation.navigate("RecipeDetail", { meal });
     },
     [navigation],
@@ -116,6 +117,7 @@ export function HomeScreenV2() {
 
   const handleDeepRead = useCallback(
     (meal: Meal) => {
+      logEvent("home_meal_askEsterCTA", { mealId: meal.id });
       navigation.navigate("EsterChat", { context: "meal", meal });
     },
     [navigation],
@@ -207,6 +209,10 @@ export function HomeScreenV2() {
 
   const handleFavoriteToggle = useCallback(async (mealId: string) => {
     const wasFavorited = favoritedMeals.has(mealId);
+    logEvent("home_meal_favoriteCTA", {
+      mealId,
+      action: wasFavorited ? "unfavorite" : "favorite",
+    });
     setFavoritedMeals((prev) => {
       const next = new Set(prev);
       if (wasFavorited) next.delete(mealId);

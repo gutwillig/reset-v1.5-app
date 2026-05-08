@@ -142,6 +142,12 @@ function deriveBiometrics(results: ScanResults) {
 export function ScanScreen({ navigation, route }: Props) {
   const mode = route.params?.mode ?? "onboarding";
   const returnTo = route.params?.returnTo ?? "ScanResults";
+  const scanSource: "onboarding" | "home" | "appopen" =
+    mode === "onboarding"
+      ? "onboarding"
+      : returnTo === "ScoreReveal"
+        ? "appopen"
+        : "home";
   const { setBiometrics } = useApp();
   const insets = useSafeAreaInsets();
   const [sdkReady, setSdkReady] = useState(false);
@@ -189,8 +195,8 @@ export function ScanScreen({ navigation, route }: Props) {
   }, [heartRate]);
 
   useEffect(() => {
-    logEvent("onboarding_scan");
-    logEvent(SCAN_PHASE_EVENTS[0]);
+    logEvent("onboarding_scan", { source: scanSource });
+    logEvent(SCAN_PHASE_EVENTS[0], { source: scanSource });
   }, []);
 
   // Initialize SDK on mount
@@ -329,10 +335,10 @@ export function ScanScreen({ navigation, route }: Props) {
         // pass through so a single-tick jump from <16% to >=66% doesn't drop
         // the "reading" event.
         if (progress >= 66 && phase < 2) {
-          if (phase < 1) logEvent(SCAN_PHASE_EVENTS[1]);
+          if (phase < 1) logEvent(SCAN_PHASE_EVENTS[1], { source: scanSource });
           setPhase(2);
           setShowMarkers(true);
-          logEvent(SCAN_PHASE_EVENTS[2]);
+          logEvent(SCAN_PHASE_EVENTS[2], { source: scanSource });
           Animated.timing(markerFadeAnim, {
             toValue: 1,
             duration: 500,
@@ -340,7 +346,7 @@ export function ScanScreen({ navigation, route }: Props) {
           }).start();
         } else if (progress >= 16 && phase < 1) {
           setPhase(1);
-          logEvent(SCAN_PHASE_EVENTS[1]);
+          logEvent(SCAN_PHASE_EVENTS[1], { source: scanSource });
         }
 
         // Poll live heart rate
@@ -423,7 +429,7 @@ export function ScanScreen({ navigation, route }: Props) {
       console.log("[ShenAI] Biometrics derived, navigating...");
       setBiometrics(biometrics);
       setScreenState("complete");
-      logEvent("onboarding_scan_completed");
+      logEvent("onboarding_scan_completed", { source: scanSource });
 
       setTimeout(async () => {
         await shutdownShenAI();

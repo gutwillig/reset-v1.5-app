@@ -26,6 +26,7 @@ import { getResetScore } from "../../services/resetScore";
 import { useAppPalette } from "../../hooks/useAppPalette";
 import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
+import { logEvent } from "../../services/braze";
 
 type FeedbackState = "idle" | "up" | "down";
 
@@ -165,6 +166,7 @@ export function NextMealScreen() {
   };
 
   const handleAskEster = () => {
+    logEvent("home_meal_askEsterCTA", { mealId: meal?.id, surface: "nextMeal" });
     const parent = navigation.getParent();
     if (meal) {
       parent?.navigate("EsterChat", { context: "meal", meal });
@@ -175,6 +177,10 @@ export function NextMealScreen() {
 
   const handleFeedback = async (value: "up" | "down") => {
     if (!meal || !plan) return;
+    logEvent(
+      value === "up" ? "home_meal_thumbsUpCTA" : "home_meal_thumbsDownCTA",
+      { slot, mealId: meal.id, surface: "nextMeal" },
+    );
     setFeedback(value);
     try {
       await submitMealFeedback({
@@ -190,6 +196,7 @@ export function NextMealScreen() {
 
   const handleRegenerate = async () => {
     if (!plan || !meal || refreshing || slot === "snack") return;
+    logEvent("home_meal_replaceCTA", { mealId: meal.id, slot, surface: "nextMeal" });
     setRefreshing(true);
     try {
       const updated = await replaceMealInSlot(

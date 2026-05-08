@@ -325,8 +325,11 @@ export function ScanScreen({ navigation, route }: Props) {
         const normalizedProgress = progress / 100;
         progressAnim.setValue(normalizedProgress);
 
-        // Phase transitions based on progress
+        // Phase transitions based on progress. Emit every phase event we
+        // pass through so a single-tick jump from <16% to >=66% doesn't drop
+        // the "reading" event.
         if (progress >= 66 && phase < 2) {
+          if (phase < 1) logEvent(SCAN_PHASE_EVENTS[1]);
           setPhase(2);
           setShowMarkers(true);
           logEvent(SCAN_PHASE_EVENTS[2]);

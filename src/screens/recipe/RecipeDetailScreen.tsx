@@ -36,6 +36,7 @@ import {
 } from "../../services/meals";
 import { getMealWhy } from "../../services/mealInsights";
 import type { MainStackParamList } from "../../navigation/MainNavigator";
+import { logEvent } from "../../services/braze";
 
 type RecipeRouteParams = {
   RecipeDetail: {
@@ -313,6 +314,10 @@ export function RecipeDetailScreen() {
   const [esterText, setEsterText] = useState<string | null>(null);
   const [esterLoading, setEsterLoading] = useState(true);
   const [isFavorited, setIsFavorited] = useState(false);
+
+  useEffect(() => {
+    logEvent("home_recipe_detail", { mealId: meal.id });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

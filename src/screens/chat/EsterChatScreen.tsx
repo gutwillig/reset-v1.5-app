@@ -68,6 +68,10 @@ export function EsterChatScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const insets = useSafeAreaInsets();
 
+  useEffect(() => {
+    BrazeService.logEvent("home_ester_chat", { context });
+  }, []);
+
   // Track keyboard height
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";

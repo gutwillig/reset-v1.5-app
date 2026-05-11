@@ -11,6 +11,7 @@ import {
 } from "../../constants/types";
 import { Button, Avatar } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { logEvent, setCustomAttribute } from "../../services/braze";
 
 type Props = NativeStackScreenProps<any, "TypeReveal">;
 
@@ -30,6 +31,11 @@ export function TypeRevealScreen({ navigation }: Props) {
 
   // Get path-specific reveal text
   const revealText = getTypeRevealText(q1, q2, hasScan);
+
+  useEffect(() => {
+    logEvent("onboarding_type_reveal", { metabolic_type: metabolicType });
+    setCustomAttribute("metabolic_type", metabolicType);
+  }, []);
 
   useEffect(() => {
     if (state.user.metabolicType !== metabolicType) {
@@ -66,6 +72,7 @@ export function TypeRevealScreen({ navigation }: Props) {
   }, []);
 
   const handleContinue = () => {
+    logEvent("onboarding_type_reveal_continueCTA");
     navigation.navigate("Share");
   };
 

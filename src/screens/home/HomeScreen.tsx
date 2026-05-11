@@ -88,6 +88,7 @@ export function HomeScreen() {
   }, []);
 
   useEffect(() => {
+    BrazeService.logEvent("home_main");
     loadProfile();
   }, [loadProfile]);
 
@@ -328,6 +329,7 @@ export function HomeScreen() {
   };
 
   const handleRecipePress = (meal: Meal) => {
+    BrazeService.logEvent("home_meal_recipeCTA", { mealId: meal.id });
     navigation.navigate("RecipeDetail", { meal });
   };
 
@@ -341,6 +343,7 @@ export function HomeScreen() {
   };
 
   const handleMealChatPress = (meal: Meal) => {
+    BrazeService.logEvent("home_meal_askEsterCTA", { mealId: meal.id });
     navigation.navigate("EsterChat", { context: "meal", meal });
   };
 
@@ -349,6 +352,24 @@ export function HomeScreen() {
     const slot = breakfastMeals.find(m => m.id === mealId) ? "breakfast"
       : lunchMeals.find(m => m.id === mealId) ? "lunch"
       : "dinner";
+
+    BrazeService.logEvent(
+      feedback === "up" ? "home_meal_thumbsUpCTA" : "home_meal_thumbsDownCTA",
+      { slot, mealId },
+    );
+
+    if (feedback === "down" && tags && tags.length > 0) {
+      const tagEvents: Record<string, string> = {
+        complex: "home_meal_feedback_tooComplex",
+        taste: "home_meal_feedback_didntLikeTaste",
+        long: "home_meal_feedback_tooLong",
+        not_full: "home_meal_feedback_didntKeepFull",
+      };
+      tags.forEach((tag) => {
+        const eventName = tagEvents[tag];
+        if (eventName) BrazeService.logEvent(eventName, { mealId, slot });
+      });
+    }
 
     // Optimistic update
     setMealFeedback((prev) => ({
@@ -386,6 +407,10 @@ export function HomeScreen() {
 
   const handleFavoriteToggle = async (mealId: string) => {
     const wasFavorited = favoritedMeals.has(mealId);
+    BrazeService.logEvent("home_meal_favoriteCTA", {
+      mealId,
+      action: wasFavorited ? "unfavorite" : "favorite",
+    });
     // Optimistic update
     setFavoritedMeals((prev) => {
       const next = new Set(prev);
@@ -441,6 +466,7 @@ export function HomeScreen() {
 
   const handleReplace = async (mealId: string, slot: string) => {
     if (!dailyPlan) return;
+    BrazeService.logEvent("home_meal_replaceCTA", { mealId, slot });
     const currentSlotMeals = slot === "breakfast" ? breakfastMeals
       : slot === "lunch" ? lunchMeals
       : dinnerMeals;

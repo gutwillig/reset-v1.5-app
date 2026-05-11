@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -11,6 +11,7 @@ import {
 } from "../../constants/types";
 import { EsterBubble, Pill, Button } from "../../components";
 import { useApp } from "../../context/AppContext";
+import { logEvent } from "../../services/braze";
 
 type Props = NativeStackScreenProps<any, "Quiz">;
 
@@ -24,6 +25,10 @@ export function QuizScreen({ navigation }: Props) {
   const [q2Answer, setQ2Answer] = useState<Q2Answer | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
 
+  useEffect(() => {
+    logEvent("onboarding_quiz");
+  }, []);
+
   const handleSelect = (value: string) => {
     setSelectedAnswer(value);
   };
@@ -31,6 +36,7 @@ export function QuizScreen({ navigation }: Props) {
   const handleNext = () => {
     if (step === 1) {
       if (!selectedAnswer) return;
+      logEvent("onboarding_quiz_continueCTA", { step: 1 });
       const answer = selectedAnswer as Q1Answer;
       setQ1Answer(answer);
       setQuizAnswer("q1", answer);
@@ -38,13 +44,14 @@ export function QuizScreen({ navigation }: Props) {
       setStep(2);
     } else if (step === 2) {
       if (!selectedAnswer) return;
+      logEvent("onboarding_quiz_continueCTA", { step: 2 });
       const answer = selectedAnswer as Q2Answer;
       setQ2Answer(answer);
       setQuizAnswer("q2", answer);
       setSelectedAnswer(null);
       setStep(3);
     } else if (step === 3) {
-      // Q3 is just the setup - CTA goes to camera permission
+      logEvent("onboarding_quiz_letEstherSeeCTA");
       navigation.navigate("CameraPerm");
     }
   };

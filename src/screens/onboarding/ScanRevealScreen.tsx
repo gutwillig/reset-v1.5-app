@@ -7,6 +7,7 @@ import { typography } from "../../constants/typography";
 import { EsterBubble, Button, Avatar } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { determineType, getTypeRevealText } from "../../constants/types";
+import { logEvent } from "../../services/braze";
 
 type Props = NativeStackScreenProps<any, "ScanReveal">;
 
@@ -65,6 +66,10 @@ export function ScanRevealScreen({ navigation }: Props) {
   const { state, setMetabolicType } = useApp();
   const biometrics = state.biometrics;
 
+  useEffect(() => {
+    logEvent("onboarding_scan_reveal");
+  }, []);
+
   // Get quiz answers for type determination
   const q1 = (state.user.quizAnswers.q1 as "afternoon_evening" | "random") || "afternoon_evening";
   const q2 = (state.user.quizAnswers.q2 as "crash" | "drift") || "crash";
@@ -73,6 +78,7 @@ export function ScanRevealScreen({ navigation }: Props) {
   const revealText = getTypeRevealText(q1, q2, true);
 
   const handleContinue = () => {
+    logEvent("onboarding_scan_reveal_seeMyTypeCTA");
     // Determine and set type based on quiz answers
     const type = determineType(q1, q2);
     setMetabolicType(type);

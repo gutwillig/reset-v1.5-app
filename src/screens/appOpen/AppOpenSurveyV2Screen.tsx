@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -23,6 +23,7 @@ import {
 } from "../../components/survey/MultipleChoiceList";
 import { NumberStepper } from "../../components/survey/NumberStepper";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
+import { logEvent, setCustomAttribute } from "../../services/braze";
 
 const STRESS_OPTIONS: MultipleChoiceOption[] = [
   { id: "work", label: "Work" },
@@ -71,7 +72,12 @@ export function AppOpenSurveyV2Screen() {
   const [sleepQuality, setSleepQuality] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    logEvent("home_checkin");
+  }, []);
+
   const exitToHome = () => {
+    logEvent("home_checkin_skipCTA", { step });
     const parent = navigation.getParent();
     parent?.dispatch(
       CommonActions.reset({ index: 0, routes: [{ name: "Tabs" }] }),
@@ -87,9 +93,27 @@ export function AppOpenSurveyV2Screen() {
   };
 
   const handleContinue = async () => {
-    if (step < 4) {
+    if (step === 1) {
+      const energy = sliderToEnergy(feeling);
+      logEvent("home_checkin_energySelectCTA", { energy });
+      logEvent(`home_checkin_energy_${energy}`);
       setStep((s) => s + 1);
       return;
+    }
+    if (step === 2) {
+      logEvent("home_checkin_stressSelectCTA", { stress: stress ?? "none" });
+      if (stress) logEvent(`home_checkin_stress_${stress}`);
+      setStep((s) => s + 1);
+      return;
+    }
+    if (step === 3) {
+      setStep((s) => s + 1);
+      return;
+    }
+
+    if (sleepQuality) {
+      logEvent("home_checkin_sleepSelectCTA", { quality: sleepQuality });
+      logEvent(`home_checkin_sleep_quality_${sleepQuality}`);
     }
 
     setSubmitting(true);

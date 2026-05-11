@@ -49,6 +49,7 @@ export function SettingsScreen() {
   );
 
   useEffect(() => {
+    BrazeService.logEvent("profile_settings");
     AsyncStorage.getItem(NOTIFICATION_PREFS_KEY).then((stored) => {
       if (stored) setNotifications(JSON.parse(stored));
     });

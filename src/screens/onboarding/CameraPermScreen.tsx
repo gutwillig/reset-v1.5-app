@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -6,6 +6,7 @@ import { useCameraPermissions } from "expo-camera";
 import { K } from "../../constants/colors";
 import { typography } from "../../constants/typography";
 import { EsterBubble, Button, Avatar } from "../../components";
+import { logEvent } from "../../services/braze";
 
 type Props = NativeStackScreenProps<any, "CameraPerm">;
 
@@ -13,7 +14,16 @@ export function CameraPermScreen({ navigation }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [denialCount, setDenialCount] = useState(0);
 
+  useEffect(() => {
+    logEvent("onboarding_camera_permission");
+  }, []);
+
   const handleRequestPermission = async () => {
+    if (denialCount > 0) {
+      logEvent("onboarding_camera_permission_tryAgainCTA");
+    } else {
+      logEvent("onboarding_camera_permission_allowCTA");
+    }
     const result = await requestPermission();
     if (result.granted) {
       navigation.navigate("Scan");
@@ -23,7 +33,11 @@ export function CameraPermScreen({ navigation }: Props) {
   };
 
   const handleSkip = () => {
-    // Skip scan and go directly to type reveal (quiz-only)
+    if (denialCount > 0) {
+      logEvent("onboarding_camera_permission_skipScanCTA");
+    } else {
+      logEvent("onboarding_camera_permission_skipCTA");
+    }
     navigation.navigate("TypeReveal");
   };
 

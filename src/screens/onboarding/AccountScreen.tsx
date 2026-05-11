@@ -20,6 +20,7 @@ import { useApp } from "../../context/AppContext";
 import { registerWithEmail, loginWithApple, loginWithGoogle } from "../../services/auth";
 import { syncOnboardingToBackend } from "../../services/onboarding";
 import { submitScanResults } from "../../services/profile";
+import { logEvent } from "../../services/braze";
 
 import Constants from "expo-constants";
 
@@ -48,6 +49,7 @@ export function AccountScreen({ navigation }: Props) {
   const [appleAvailable, setAppleAvailable] = useState(Platform.OS === "ios");
 
   React.useEffect(() => {
+    logEvent("onboarding_account");
     if (Platform.OS === "ios") {
       AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
     }
@@ -56,6 +58,7 @@ export function AccountScreen({ navigation }: Props) {
   const isValid = email.includes("@") && password.length >= 8;
 
   const handleCreateAccount = async () => {
+    logEvent("onboarding_account_saveProfileCTA");
     setError(null);
     setIsLoading(true);
     try {
@@ -101,6 +104,7 @@ export function AccountScreen({ navigation }: Props) {
   };
 
   const handleAppleSignIn = async () => {
+    logEvent("onboarding_account_appleSignInCTA");
     setError(null);
     setIsLoading(true);
     try {
@@ -204,6 +208,7 @@ export function AccountScreen({ navigation }: Props) {
   };
 
   const handleSkip = () => {
+    logEvent("onboarding_account_skipCTA");
     completeOnboarding();
   };
 

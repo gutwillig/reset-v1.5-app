@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Image,
   Share,
+  ActivityIndicator,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BlurView } from "expo-blur";
@@ -19,6 +20,7 @@ import { determineType } from "../../constants/types";
 import { useApp } from "../../context/AppContext";
 import { logEvent, setCustomAttribute } from "../../services/braze";
 import { ScoreRing } from "../../components/survey/ScoreRing";
+import { getResetScore, ResetScore } from "../../services/resetScore";
 
 type Props = NativeStackScreenProps<any, "TypeReveal">;
 
@@ -213,9 +215,13 @@ function FrontCard({
 function MiddleCard({
   type,
   score,
+  confidence,
+  daysToFull,
 }: {
   type: MetabolicType;
   score: number;
+  confidence: number;
+  daysToFull: number;
 }) {
   const logo = TYPE_LOGO[type];
   // ScoreRing renders into a 320×200 box at width=BASE_W. The card's blue
@@ -244,10 +250,12 @@ function MiddleCard({
           </View>
           <View style={styles.confidenceRow}>
             <Text style={styles.confidenceLabel}>Confidence:</Text>
-            <Text style={styles.confidenceValue}>15%</Text>
-            <Text style={styles.confidenceHint}>
-              Estimated 55 days til near 100% confidence
-            </Text>
+            <Text style={styles.confidenceValue}>{confidence}%</Text>
+            {daysToFull > 0 ? (
+              <Text style={styles.confidenceHint}>
+                Estimated {daysToFull} days til near 100% confidence
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -335,7 +343,40 @@ export function TypeRevealScreen({ navigation }: Props) {
     "afternoon_evening";
   const q2 = (state.user.quizAnswers.q2 as "crash" | "drift") || "crash";
   const metabolicType = determineType(q1, q2);
-  const score = state.biometrics?.wellness ?? 70;
+
+  // Pull the same Reset Score the Home screen will show, so the number on
+  // the middle card matches Home exactly (rather than the raw SDK wellness).
+  // Backend lazily computes/persists if the fire-and-forget recompute kicked
+  // off by submitScanResults hasn't landed yet, so the fetch always succeeds
+  // when a scan exists.
+  const [resetScore, setResetScore] = useState<ResetScore | null>(null);
+  const [scoreLoaded, setScoreLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getResetScore();
+        if (!cancelled) setResetScore(res.score ?? null);
+      } catch {
+        // Fall back to local wellness if fetch fails.
+      } finally {
+        if (!cancelled) setScoreLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const score = Math.round(
+    resetScore?.score ?? state.biometrics?.wellness ?? 70
+  );
+  const confidence = Math.round(resetScore?.confidence ?? 15);
+  // Same formula HomeScreenV2 uses for the ConfidenceCard, so the days
+  // estimate stays consistent between TypeReveal and Home.
+  const daysToFull =
+    confidence < 100 ? Math.max(1, Math.ceil(100 - confidence)) : 0;
 
   useEffect(() => {
     logEvent("onboarding_type_reveal", { metabolic_type: metabolicType });
@@ -351,12 +392,24 @@ export function TypeRevealScreen({ navigation }: Props) {
     () => [new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)],
     []
   );
-  // Pan offset (x + y) for the currently active card.
-  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  // Pan offset (x + y) for the currently active card. Recreated after each
+  // successful dismiss so the next active card binds to a fresh pan at (0,0)
+  // — otherwise resetting the shared pan after the exit animation would
+  // visibly snap the just-dismissed card back to center for one frame
+  // before the state update hides it (visible as a flash).
+  const [panEpoch, setPanEpoch] = useState(0);
+  const pan = useMemo(
+    () => new Animated.ValueXY({ x: 0, y: 0 }),
+    [panEpoch]
+  );
 
   useEffect(() => {
+    if (!scoreLoaded) return;
     // Back card lands first, then middle, then front — so the stack
-    // visibly assembles in z-order, mirroring Figma 1940:17991.
+    // visibly assembles in z-order, mirroring Figma 1940:17991. Gated on
+    // scoreLoaded so the cards only fly in once the Reset Score fetch
+    // has resolved — otherwise the middle card would briefly show the
+    // fallback wellness number before snapping to the real value.
     Animated.stagger(140, [
       Animated.spring(slideIn[2], {
         toValue: 1,
@@ -377,7 +430,7 @@ export function TypeRevealScreen({ navigation }: Props) {
         tension: 50,
       }),
     ]).start();
-  }, []);
+  }, [scoreLoaded]);
 
   const advance = () => {
     setActiveIdx((i) => {
@@ -406,8 +459,8 @@ export function TypeRevealScreen({ navigation }: Props) {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      pan.setValue({ x: 0, y: 0 });
       advance();
+      setPanEpoch((e) => e + 1);
     });
   };
 
@@ -435,7 +488,7 @@ export function TypeRevealScreen({ navigation }: Props) {
           }
         },
       }),
-    []
+    [pan]
   );
 
   const renderCard = (idx: 0 | 1 | 2) => {
@@ -511,7 +564,14 @@ export function TypeRevealScreen({ navigation }: Props) {
         />
       );
     } else if (idx === 1) {
-      content = <MiddleCard type={metabolicType} score={score} />;
+      content = (
+        <MiddleCard
+          type={metabolicType}
+          score={score}
+          confidence={confidence}
+          daysToFull={daysToFull}
+        />
+      );
     } else {
       content = <BackCard type={metabolicType} onTap={advance} />;
     }
@@ -568,6 +628,15 @@ export function TypeRevealScreen({ navigation }: Props) {
 
       {/* No top avatar on this screen — the card stack is the focal point. */}
 
+      {/* Loading state while the Reset Score fetches. Cards are still
+          rendered underneath but sit at their entry pose (off-screen, up-
+          right) until scoreLoaded flips and the stagger kicks in. */}
+      {!scoreLoaded && (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator size="large" color={WHITE} />
+        </View>
+      )}
+
       {/* Cards rendered back→middle→front so z-order works naturally. */}
       {renderCard(2)}
       {renderCard(1)}
@@ -578,6 +647,11 @@ export function TypeRevealScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: MAROON },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   safe: { width: "100%" },
   topBar: {
     height: 40,

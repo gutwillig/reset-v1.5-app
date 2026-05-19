@@ -396,11 +396,17 @@ export function TypeRevealScreen({ navigation }: Props) {
   const { state } = useApp();
 
   // `metabolicType` is set in CreateAccountScreen from the backend
-  // typing-function response. Fall back to "Explorer" on the rare path
-  // where the user reaches this screen before the response landed — the
-  // backend always assigns a real type when a scan exists.
+  // typing-function response. Fall back to "Explorer" when:
+  //   - the response hasn't landed yet (undefined), OR
+  //   - the backend returned `starting_read` (non-scanner path).
+  // The ticket: starting_read surfaces as Explorer with soft directional
+  // copy. The display lookups (TYPE_DISPLAY/LOGO/TAGLINE/PARAGRAPH) are
+  // keyed by the 5 real archetypes only, so we normalize here once.
+  const rawType = state.user.metabolicType as string | undefined;
   const metabolicType: MetabolicType =
-    (state.user.metabolicType as MetabolicType) ?? "Explorer";
+    rawType && rawType !== "starting_read"
+      ? (rawType as MetabolicType)
+      : "Explorer";
 
   // Pull the same Reset Score the Home screen will show, so the number on
   // the middle card matches Home exactly (rather than the raw SDK wellness).

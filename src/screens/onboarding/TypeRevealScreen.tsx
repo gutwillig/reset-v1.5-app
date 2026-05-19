@@ -16,7 +16,9 @@ import { BlurView } from "expo-blur";
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 import { MetabolicType } from "../../constants/colors";
 import { fonts } from "../../constants/typography";
-import { determineType } from "../../constants/types";
+// RES-121: metabolicType is now sourced from `state.user.metabolicType`
+// (set by CreateAccountScreen after the backend's TypingService runs on
+// the submitted behaviorAnswers). The FE no longer computes the type.
 import { useApp } from "../../context/AppContext";
 import { logEvent, setCustomAttribute } from "../../services/braze";
 import { ScoreRing } from "../../components/survey/ScoreRing";
@@ -377,13 +379,14 @@ function BackCard({ type, onTap }: { type: MetabolicType; onTap: () => void }) {
 
 // ── Screen ────────────────────────────────────────────────────────────
 export function TypeRevealScreen({ navigation }: Props) {
-  const { state, setMetabolicType } = useApp();
+  const { state } = useApp();
 
-  const q1 =
-    (state.user.quizAnswers.q1 as "afternoon_evening" | "random") ||
-    "afternoon_evening";
-  const q2 = (state.user.quizAnswers.q2 as "crash" | "drift") || "crash";
-  const metabolicType = determineType(q1, q2);
+  // `metabolicType` is set in CreateAccountScreen from the backend
+  // typing-function response. Fall back to "Explorer" on the rare path
+  // where the user reaches this screen before the response landed — the
+  // backend always assigns a real type when a scan exists.
+  const metabolicType: MetabolicType =
+    (state.user.metabolicType as MetabolicType) ?? "Explorer";
 
   // Pull the same Reset Score the Home screen will show, so the number on
   // the middle card matches Home exactly (rather than the raw SDK wellness).
@@ -431,7 +434,8 @@ export function TypeRevealScreen({ navigation }: Props) {
   useEffect(() => {
     logEvent("onboarding_type_reveal", { metabolic_type: metabolicType });
     setCustomAttribute("metabolic_type", metabolicType);
-    if (state.user.metabolicType !== metabolicType) setMetabolicType(metabolicType);
+    // metabolicType is sourced from state directly now — backend is the
+    // authoritative writer (see CreateAccountScreen / AccountGateScreen).
   }, []);
 
   const [revealed, setRevealed] = useState(false);

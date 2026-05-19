@@ -14,7 +14,11 @@ export async function syncOnboardingToBackend(params: {
   behaviorAnswers: { q1?: string; q2?: string; q3?: string };
   tastePreferences: string[];
   dietaryRestrictions: string[];
-}): Promise<{ primaryBucket: MetabolicType | null }> {
+}): Promise<{
+  primaryBucket: MetabolicType | null;
+  startingRead: boolean;
+  glp1Flag: boolean;
+}> {
   const { goal, behaviorAnswers, tastePreferences, dietaryRestrictions } =
     params;
 
@@ -30,5 +34,7 @@ export async function syncOnboardingToBackend(params: {
   return {
     primaryBucket:
       (updated?.profile?.primaryBucket as MetabolicType | undefined) ?? null,
+    startingRead: !!updated?.profile?.startingRead,
+    glp1Flag: !!updated?.profile?.glp1Flag,
   };
 }

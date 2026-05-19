@@ -76,6 +76,14 @@ const TYPE_PARAGRAPH: Record<MetabolicType, string> = {
     "Your metabolism has adapted to protect itself. Calorie-sufficient meals help your metabolism find its rhythm again — never deficit-framed.",
 };
 
+// RES-121 non-scanner copy. When the backend returns `starting_read`, we
+// surface "Explorer" with soft directional language that points to "we'll
+// learn more once you scan" rather than asserting a metabolic pattern.
+const STARTING_READ_TAGLINE =
+  "Your starting read — we'll sharpen it together once you scan.";
+const STARTING_READ_PARAGRAPH =
+  "Without a scan, I'm working from your answers alone. A balanced baseline is the right place to start, and the first scan will tell me how your body actually responds.";
+
 // Figma-derived card geometry (target frame is 402-wide). Scale to actual
 // screen width so the same proportions hold on smaller phones. All cards
 // share the same 378×738 footprint per Figma — the stack-peek effect
@@ -136,11 +144,13 @@ const EXIT_ROT = -16;
 // ── Cards ──────────────────────────────────────────────────────────────
 function FrontCard({
   type,
+  startingRead,
   revealed,
   onReveal,
   onShareResults,
 }: {
   type: MetabolicType;
+  startingRead: boolean;
   revealed: boolean;
   onReveal: () => void;
   onShareResults: () => void;
@@ -175,9 +185,13 @@ function FrontCard({
             </View>
             <View style={styles.typeTextWrap}>
               <Text style={styles.typeName}>{TYPE_DISPLAY[type]}</Text>
-              <Text style={styles.typeTagline}>{TYPE_TAGLINE[type]}</Text>
+              <Text style={styles.typeTagline}>
+                {startingRead ? STARTING_READ_TAGLINE : TYPE_TAGLINE[type]}
+              </Text>
             </View>
-            <Text style={styles.typeParagraph}>{TYPE_PARAGRAPH[type]}</Text>
+            <Text style={styles.typeParagraph}>
+              {startingRead ? STARTING_READ_PARAGRAPH : TYPE_PARAGRAPH[type]}
+            </Text>
 
             {/* Blur overlay with Tap to reveal — fades out once tapped. */}
             <Animated.View
@@ -598,6 +612,7 @@ export function TypeRevealScreen({ navigation }: Props) {
       content = (
         <FrontCard
           type={metabolicType}
+          startingRead={!!state.user.startingRead}
           revealed={revealed}
           onReveal={() => {
             logEvent("onboarding_type_reveal_tap");

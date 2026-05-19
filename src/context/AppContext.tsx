@@ -14,6 +14,10 @@ interface UserProfile {
   email?: string;
   name?: string;
   metabolicType?: MetabolicType;
+  // RES-121 typing-function flags. `internalConfidence` itself stays
+  // backend-only — only these public flags surface here.
+  startingRead?: boolean;
+  glp1Flag?: boolean;
   goal?: string;
   quizAnswers: Record<string, string>;
   tastePreferences: string[];
@@ -68,6 +72,14 @@ type AppAction =
   | { type: "LOAD_STATE"; payload: Omit<AppState, "auth" | "isLoading"> }
   | { type: "SET_QUIZ_ANSWER"; payload: { questionId: string; answer: string } }
   | { type: "SET_METABOLIC_TYPE"; payload: MetabolicType }
+  | {
+      type: "SET_TYPING_RESULT";
+      payload: {
+        metabolicType: MetabolicType;
+        startingRead: boolean;
+        glp1Flag: boolean;
+      };
+    }
   | { type: "SET_GOAL"; payload: string }
   | { type: "SET_BIOMETRICS"; payload: BiometricData }
   | { type: "SET_TASTE_PREFERENCES"; payload: string[] }
@@ -130,6 +142,17 @@ function appReducer(state: AppState, action: AppAction): AppState {
         user: {
           ...state.user,
           metabolicType: action.payload,
+        },
+      };
+
+    case "SET_TYPING_RESULT":
+      return {
+        ...state,
+        user: {
+          ...state.user,
+          metabolicType: action.payload.metabolicType,
+          startingRead: action.payload.startingRead,
+          glp1Flag: action.payload.glp1Flag,
         },
       };
 
@@ -222,6 +245,11 @@ interface AppContextValue {
   dispatch: React.Dispatch<AppAction>;
   setQuizAnswer: (questionId: string, answer: string) => void;
   setMetabolicType: (type: MetabolicType) => void;
+  setTypingResult: (payload: {
+    metabolicType: MetabolicType;
+    startingRead: boolean;
+    glp1Flag: boolean;
+  }) => void;
   setGoal: (goal: string) => void;
   setBiometrics: (data: BiometricData) => void;
   setTastePreferences: (preferences: string[]) => void;
@@ -363,6 +391,14 @@ export function AppProvider({ children }: AppProviderProps) {
     dispatch({ type: "SET_QUIZ_ANSWER", payload: { questionId, answer } });
   };
 
+  const setTypingResult = (payload: {
+    metabolicType: MetabolicType;
+    startingRead: boolean;
+    glp1Flag: boolean;
+  }) => {
+    dispatch({ type: "SET_TYPING_RESULT", payload });
+  };
+
   const setMetabolicType = (type: MetabolicType) => {
     dispatch({ type: "SET_METABOLIC_TYPE", payload: type });
   };
@@ -431,6 +467,7 @@ export function AppProvider({ children }: AppProviderProps) {
     dispatch,
     setQuizAnswer,
     setMetabolicType,
+    setTypingResult,
     setGoal,
     setBiometrics,
     setTastePreferences,

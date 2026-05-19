@@ -92,6 +92,10 @@ export interface UpdateProfileResponse {
     cravingType: string | null;
     dietaryRestrictions: string[];
     tasteCluster: string | null;
+    // RES-121 typing-function flags. `internalConfidence` itself stays
+    // backend-only per the ticket.
+    startingRead?: boolean;
+    glp1Flag?: boolean;
   };
 }
 

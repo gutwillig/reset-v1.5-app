@@ -21,6 +21,7 @@ import { useApp } from "../../context/AppContext";
 import { logEvent, setCustomAttribute } from "../../services/braze";
 import { ScoreRing } from "../../components/survey/ScoreRing";
 import { getResetScore, ResetScore } from "../../services/resetScore";
+import { getScanInsightsMessage } from "../../services/scanInsights";
 
 type Props = NativeStackScreenProps<any, "TypeReveal">;
 
@@ -74,11 +75,13 @@ const TYPE_PARAGRAPH: Record<MetabolicType, string> = {
 };
 
 // Figma-derived card geometry (target frame is 402-wide). Scale to actual
-// screen width so the same proportions hold on smaller phones.
+// screen width so the same proportions hold on smaller phones. All cards
+// share the same 378×738 footprint per Figma — the stack-peek effect
+// comes purely from the staggered bottom offsets + the inset "Bubble"
+// shadow on each card, not from narrowing widths.
 const SCALE = Math.min(1, SCREEN_W / 402);
-const CARD_W_FRONT = Math.round(378 * SCALE);
-const CARD_W_MID = Math.round(362 * SCALE);
-const CARD_W_BACK = Math.round(346 * SCALE);
+const CARD_W = Math.round(378 * SCALE);
+const CARD_WIDTHS = [CARD_W, CARD_W, CARD_W, CARD_W];
 // Figma 1916-17871 card layout: width 378, height 738. Use the Figma value
 // directly so the inner `justify-content: center` lands exactly where the
 // design expects. (iPhone 16 Pro window height = 852pt, so 738 fits with
@@ -88,13 +91,20 @@ const CARD_H = 738;
 // sitting) card stays an exact 50px regardless of safe-area variations.
 // 6px between each per Figma — just a thin sliver of the next card visible
 // at the bottom edge.
-const CARD_BOTTOM_BACK = 50;
-const CARD_BOTTOM_MID = 56;
-const CARD_BOTTOM_FRONT = 62;
+const CARD_BOTTOMS = [62, 56, 50, 44]; // idx 0 (front) → idx 3 (back)
 
-// All three cards share the page-surface white per Figma — the visible
-// peek between stacked cards comes from the inset "Bubble" shadow, not
-// a contrasting fill.
+const TOTAL_CARDS = 4;
+
+// Mirrors the backend's fallback text — used only if the parallel LLM
+// fetch fails outright (timeout, auth error, etc.). The normal "no scan"
+// case doesn't apply here because TypeReveal is only reached after a
+// successful scan + account creation.
+const INSIGHT_FALLBACK =
+  "Your scan picked up where you are right now — and today's meals are picked to meet you there.";
+
+// All cards share the page-surface white per Figma — the visible peek
+// between stacked cards comes from the inset "Bubble" shadow, not a
+// contrasting fill.
 const CARD_BG_FRONT = "#FAFDFE";
 
 const SWIPE_DISMISS_DX = -Math.max(80, SCREEN_W * 0.28);
@@ -106,9 +116,11 @@ const SWIPE_DISMISS_VX = -0.6;
 const ENTRY_POSE = [
   // idx 0 (front): biggest fling
   { dx: SCREEN_W * 0.75, dy: -SCREEN_H * 0.55, rot: 16 },
-  // idx 1 (middle)
-  { dx: SCREEN_W * 0.5, dy: -SCREEN_H * 0.38, rot: 11 },
-  // idx 2 (back): subtle settle
+  // idx 1
+  { dx: SCREEN_W * 0.6, dy: -SCREEN_H * 0.45, rot: 13 },
+  // idx 2 (insight)
+  { dx: SCREEN_W * 0.42, dy: -SCREEN_H * 0.3, rot: 9 },
+  // idx 3 (back): subtle settle
   { dx: SCREEN_W * 0.28, dy: -SCREEN_H * 0.2, rot: 6 },
 ];
 
@@ -150,7 +162,7 @@ function FrontCard({
   }, [revealed]);
 
   return (
-    <View style={[styles.card, { width: CARD_W_FRONT, backgroundColor: CARD_BG_FRONT }]}>
+    <View style={[styles.card, { width: CARD_WIDTHS[0], backgroundColor: CARD_BG_FRONT }]}>
       <View style={styles.cardContentTight}>
         <View style={styles.innerStack}>
           <Text style={styles.headerText}>Here is your type!</Text>
@@ -227,10 +239,10 @@ function MiddleCard({
   // ScoreRing renders into a 320×200 box at width=BASE_W. The card's blue
   // score surface is `cardW - cardPadding*2 - surfacePadding*2` wide; size
   // the ring just under that so the SVG sits flush.
-  const ringWidth = CARD_W_MID - 24 * 2 - 16 * 2;
+  const ringWidth = CARD_WIDTHS[1] - 24 * 2 - 16 * 2;
 
   return (
-    <View style={[styles.card, { width: CARD_W_MID, backgroundColor: CARD_BG_FRONT }]}>
+    <View style={[styles.card, { width: CARD_WIDTHS[1], backgroundColor: CARD_BG_FRONT }]}>
       <View style={styles.cardContent}>
         <Image source={logo} style={styles.middleTypeLogo} resizeMode="contain" />
 
@@ -265,10 +277,39 @@ function MiddleCard({
   );
 }
 
+function InsightCard({
+  type,
+  insightText,
+}: {
+  type: MetabolicType;
+  insightText: string;
+}) {
+  const logo = TYPE_LOGO[type];
+  return (
+    <View style={[styles.card, { width: CARD_WIDTHS[2], backgroundColor: CARD_BG_FRONT }]}>
+      <View style={styles.insightCardContent}>
+        <Image source={logo} style={styles.middleTypeLogo} resizeMode="contain" />
+        <Text style={styles.midGreeting}>
+          Here's my biggest takeaway from your scan.
+        </Text>
+        <View style={styles.insightWrap}>
+          <View style={[styles.eyebrowRow, styles.insightEyebrowRow]}>
+            <View style={styles.eyebrowDot} />
+            <Text style={styles.eyebrowText}>Today's Insight</Text>
+          </View>
+          <View style={styles.insightBubble}>
+            <Text style={styles.insightBody}>{insightText}</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function BackCard({ type, onTap }: { type: MetabolicType; onTap: () => void }) {
   const logo = TYPE_LOGO[type];
   return (
-    <View style={[styles.card, { width: CARD_W_BACK, backgroundColor: CARD_BG_FRONT }]}>
+    <View style={[styles.card, { width: CARD_WIDTHS[3], backgroundColor: CARD_BG_FRONT }]}>
       <View style={styles.backCardContent}>
         <View style={styles.backCardTop}>
           <Image source={logo} style={styles.middleTypeLogo} resizeMode="contain" />
@@ -336,7 +377,7 @@ function BackCard({ type, onTap }: { type: MetabolicType; onTap: () => void }) {
 
 // ── Screen ────────────────────────────────────────────────────────────
 export function TypeRevealScreen({ navigation }: Props) {
-  const { state, setMetabolicType, setHomeV2Enabled, completeOnboarding } = useApp();
+  const { state, setMetabolicType } = useApp();
 
   const q1 =
     (state.user.quizAnswers.q1 as "afternoon_evening" | "random") ||
@@ -348,21 +389,30 @@ export function TypeRevealScreen({ navigation }: Props) {
   // the middle card matches Home exactly (rather than the raw SDK wellness).
   // Backend lazily computes/persists if the fire-and-forget recompute kicked
   // off by submitScanResults hasn't landed yet, so the fetch always succeeds
-  // when a scan exists.
+  // when a scan exists. The insight blurb is fetched in parallel — the LLM
+  // call dominates total latency, so kicking it off alongside the score
+  // keeps the loading window tight.
   const [resetScore, setResetScore] = useState<ResetScore | null>(null);
-  const [scoreLoaded, setScoreLoaded] = useState(false);
+  const [insightText, setInsightText] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const res = await getResetScore();
-        if (!cancelled) setResetScore(res.score ?? null);
-      } catch {
-        // Fall back to local wellness if fetch fails.
-      } finally {
-        if (!cancelled) setScoreLoaded(true);
+      const [scoreRes, insightRes] = await Promise.allSettled([
+        getResetScore(),
+        // No meal slots yet — the endpoint adapts the prompt to skip meal
+        // references when slots are absent.
+        getScanInsightsMessage(undefined),
+      ]);
+      if (cancelled) return;
+      if (scoreRes.status === "fulfilled") {
+        setResetScore(scoreRes.value.score ?? null);
       }
+      if (insightRes.status === "fulfilled") {
+        setInsightText(insightRes.value.text);
+      }
+      setLoaded(true);
     })();
     return () => {
       cancelled = true;
@@ -389,7 +439,8 @@ export function TypeRevealScreen({ navigation }: Props) {
 
   // Per-card entry progress: 0 = pre-entry pose (offset + rotation), 1 = settled.
   const slideIn = useMemo(
-    () => [new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)],
+    () =>
+      Array.from({ length: TOTAL_CARDS }, () => new Animated.Value(0)),
     []
   );
   // Pan offset (x + y) for the currently active card. Recreated after each
@@ -404,45 +455,40 @@ export function TypeRevealScreen({ navigation }: Props) {
   );
 
   useEffect(() => {
-    if (!scoreLoaded) return;
-    // Back card lands first, then middle, then front — so the stack
-    // visibly assembles in z-order, mirroring Figma 1940:17991. Gated on
-    // scoreLoaded so the cards only fly in once the Reset Score fetch
-    // has resolved — otherwise the middle card would briefly show the
-    // fallback wellness number before snapping to the real value.
-    Animated.stagger(140, [
-      Animated.spring(slideIn[2], {
-        toValue: 1,
-        useNativeDriver: true,
-        friction: 9,
-        tension: 50,
-      }),
-      Animated.spring(slideIn[1], {
-        toValue: 1,
-        useNativeDriver: true,
-        friction: 9,
-        tension: 50,
-      }),
-      Animated.spring(slideIn[0], {
-        toValue: 1,
-        useNativeDriver: true,
-        friction: 9,
-        tension: 50,
-      }),
-    ]).start();
-  }, [scoreLoaded]);
+    if (!loaded) return;
+    // Back card lands first, then front — so the stack visibly assembles
+    // in z-order, mirroring Figma 1940:17991. Gated on `loaded` so the
+    // cards only fly in once BOTH the Reset Score and the insight blurb
+    // have resolved — otherwise we'd briefly show fallback values for
+    // either one before snapping to the real text.
+    Animated.stagger(
+      140,
+      [3, 2, 1, 0].map((i) =>
+        Animated.spring(slideIn[i], {
+          toValue: 1,
+          useNativeDriver: true,
+          friction: 9,
+          tension: 50,
+        }),
+      ),
+    ).start();
+  }, [loaded]);
 
   const advance = () => {
-    setActiveIdx((i) => {
-      const next = i + 1;
-      if (next >= 3) {
-        logEvent("onboarding_type_reveal_continueCTA");
-        setHomeV2Enabled(true);
-        completeOnboarding();
-      }
-      return next;
-    });
+    setActiveIdx((i) => Math.min(i + 1, TOTAL_CARDS));
   };
+
+  // Navigate AFTER React commits the state change — calling navigation.replace
+  // inside the setActiveIdx updater triggers a navigator state update while
+  // TypeReveal is rendering, which React flags as a setState-in-render warning.
+  useEffect(() => {
+    if (activeIdx >= TOTAL_CARDS) {
+      logEvent("onboarding_type_reveal_continueCTA");
+      // After the meal-rec teaser card, route to the Paywall (which owns
+      // the completeOnboarding + setHomeV2Enabled handoff to NextMeal).
+      navigation.replace("Paywall");
+    }
+  }, [activeIdx, navigation]);
 
   const dismissActive = () => {
     // Continue the swipe from wherever the user released — translate up-left
@@ -491,7 +537,7 @@ export function TypeRevealScreen({ navigation }: Props) {
     [pan]
   );
 
-  const renderCard = (idx: 0 | 1 | 2) => {
+  const renderCard = (idx: 0 | 1 | 2 | 3) => {
     const isActive = idx === activeIdx;
     const isDismissed = idx < activeIdx;
     const pose = ENTRY_POSE[idx];
@@ -572,18 +618,19 @@ export function TypeRevealScreen({ navigation }: Props) {
           daysToFull={daysToFull}
         />
       );
+    } else if (idx === 2) {
+      content = (
+        <InsightCard
+          type={metabolicType}
+          insightText={insightText ?? INSIGHT_FALLBACK}
+        />
+      );
     } else {
       content = <BackCard type={metabolicType} onTap={advance} />;
     }
 
-    const cardW =
-      idx === 0 ? CARD_W_FRONT : idx === 1 ? CARD_W_MID : CARD_W_BACK;
-    const cardBottom =
-      idx === 0
-        ? CARD_BOTTOM_FRONT
-        : idx === 1
-        ? CARD_BOTTOM_MID
-        : CARD_BOTTOM_BACK;
+    const cardW = CARD_WIDTHS[idx];
+    const cardBottom = CARD_BOTTOMS[idx];
 
     return (
       <Animated.View
@@ -628,16 +675,18 @@ export function TypeRevealScreen({ navigation }: Props) {
 
       {/* No top avatar on this screen — the card stack is the focal point. */}
 
-      {/* Loading state while the Reset Score fetches. Cards are still
-          rendered underneath but sit at their entry pose (off-screen, up-
-          right) until scoreLoaded flips and the stagger kicks in. */}
-      {!scoreLoaded && (
+      {/* Loading state while the Reset Score + scan-insight blurb fetch in
+          parallel. Cards are still rendered underneath but sit at their
+          entry pose (off-screen, up-right) until `loaded` flips and the
+          stagger kicks in. */}
+      {!loaded && (
         <View style={styles.loadingOverlay} pointerEvents="none">
           <ActivityIndicator size="large" color={WHITE} />
         </View>
       )}
 
-      {/* Cards rendered back→middle→front so z-order works naturally. */}
+      {/* Cards rendered back→front so z-order works naturally. */}
+      {renderCard(3)}
       {renderCard(2)}
       {renderCard(1)}
       {renderCard(0)}
@@ -924,5 +973,38 @@ const styles = StyleSheet.create({
     color: SUBTLE,
     letterSpacing: -0.12,
     textAlign: "center",
+  },
+
+  // Insight card (3rd in stack — "Here's my biggest takeaway from your scan.")
+  // Per Figma 2413:8440 — single column, vertically centered, gap 24 between
+  // logo / header / insight group; the insight group itself is gap 6 (eyebrow
+  // → bubble) so it reads as one unit directly below the header.
+  insightCardContent: {
+    flex: 1,
+    padding: 24,
+    gap: 24,
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
+  insightWrap: { gap: 6, width: "100%" },
+  insightEyebrowRow: { paddingHorizontal: 8 },
+  insightBubble: {
+    borderWidth: 0.5,
+    borderColor: "#C3B9BA",
+    paddingTop: 10,
+    paddingBottom: 16,
+    paddingLeft: 16,
+    paddingRight: 16,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  insightBody: {
+    fontFamily: fonts.dmSans,
+    fontSize: 16,
+    lineHeight: 22,
+    color: SUBTLE,
+    letterSpacing: -0.16,
   },
 });

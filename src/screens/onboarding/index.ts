@@ -13,3 +13,4 @@ export { RestrictScreen } from "./RestrictScreen";
 export { AccountScreen } from "./AccountScreen";
 export { AccountGateScreen } from "./AccountGateScreen";
 export { CreateAccountScreen } from "./CreateAccountScreen";
+export { PaywallScreen } from "./PaywallScreen";

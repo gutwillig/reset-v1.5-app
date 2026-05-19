@@ -10,6 +10,7 @@ import {
   AccountScreen,
   AccountGateScreen,
   CreateAccountScreen,
+  PaywallScreen,
 } from "../screens/onboarding";
 import { K } from "../constants/colors";
 
@@ -28,6 +29,7 @@ export type OnboardingStackParamList = {
   AccountGate: undefined;
   CreateAccount: undefined;
   TypeReveal: undefined;
+  Paywall: undefined;
   Share: undefined;
   Account: undefined;
 };
@@ -94,6 +96,15 @@ export function OnboardingNavigator() {
         name="TypeReveal"
         component={TypeRevealScreen}
         options={{ animation: "fade" }}
+      />
+      <Stack.Screen
+        name="Paywall"
+        component={PaywallScreen}
+        options={{
+          contentStyle: { backgroundColor: K.brown },
+          animation: "fade",
+          gestureEnabled: false,
+        }}
       />
       <Stack.Screen name="Share" component={ShareScreen} />
       <Stack.Screen name="Account" component={AccountScreen} />

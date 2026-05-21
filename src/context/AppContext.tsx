@@ -10,6 +10,17 @@ import { requestPushPermission } from "../services/pushNotifications";
 import { notifyAppOpened } from "../services/notifications";
 
 // State types
+
+// RES-121 pre-scan calibration — height/weight/age/biological sex. Feeds
+// ShenAI (so it can return BMR/TDEE) and the typing function (age/sex for
+// HRV norms; height/weight to compute the expected-BMR delta).
+export interface CalibrationData {
+  heightCm: number;
+  weightKg: number;
+  age: number;
+  biologicalSex: "male" | "female";
+}
+
 interface UserProfile {
   email?: string;
   name?: string;
@@ -19,6 +30,7 @@ interface UserProfile {
   startingRead?: boolean;
   glp1Flag?: boolean;
   goal?: string;
+  calibration?: CalibrationData;
   quizAnswers: Record<string, string>;
   tastePreferences: string[];
   dietaryRestrictions: string[];
@@ -81,6 +93,7 @@ type AppAction =
       };
     }
   | { type: "SET_GOAL"; payload: string }
+  | { type: "SET_CALIBRATION"; payload: CalibrationData }
   | { type: "SET_BIOMETRICS"; payload: BiometricData }
   | { type: "SET_TASTE_PREFERENCES"; payload: string[] }
   | { type: "SET_DIETARY_RESTRICTIONS"; payload: string[] }
@@ -102,7 +115,9 @@ const initialState: AppState = {
   },
   biometrics: null,
   auth: { isAuthenticated: false, authUser: null },
-  settings: { homeV2Enabled: false, appOpenFlowEnabled: false, useNewSurveyFlow: false },
+  // Experimental flags default ON — testers opt out, not in. They're also
+  // re-asserted on every SET_AUTH (account creation + sign-in).
+  settings: { homeV2Enabled: true, appOpenFlowEnabled: true, useNewSurveyFlow: true },
   isLoading: true,
 };
 
@@ -165,6 +180,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
         },
       };
 
+    case "SET_CALIBRATION":
+      return {
+        ...state,
+        user: {
+          ...state.user,
+          calibration: action.payload,
+        },
+      };
+
     case "SET_BIOMETRICS":
       return {
         ...state,
@@ -203,6 +227,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         auth: action.payload,
+        // Force the experimental flags ON whenever a user is created or
+        // signs back in, so testers never land on the legacy flows by
+        // default. A persisted `false` from an earlier session (or a
+        // mid-session opt-out) is overridden here. setAuth only fires on
+        // explicit auth actions — never on app launch — so a tester's
+        // opt-out still holds for the rest of that session.
+        settings: {
+          ...state.settings,
+          homeV2Enabled: true,
+          appOpenFlowEnabled: true,
+          useNewSurveyFlow: true,
+        },
       };
 
     case "SET_HOME_V2_ENABLED":
@@ -251,6 +287,7 @@ interface AppContextValue {
     glp1Flag: boolean;
   }) => void;
   setGoal: (goal: string) => void;
+  setCalibration: (data: CalibrationData) => void;
   setBiometrics: (data: BiometricData) => void;
   setTastePreferences: (preferences: string[]) => void;
   setDietaryRestrictions: (restrictions: string[]) => void;
@@ -407,6 +444,10 @@ export function AppProvider({ children }: AppProviderProps) {
     dispatch({ type: "SET_GOAL", payload: goal });
   };
 
+  const setCalibration = (data: CalibrationData) => {
+    dispatch({ type: "SET_CALIBRATION", payload: data });
+  };
+
   const setBiometrics = (data: BiometricData) => {
     dispatch({ type: "SET_BIOMETRICS", payload: data });
   };
@@ -469,6 +510,7 @@ export function AppProvider({ children }: AppProviderProps) {
     setMetabolicType,
     setTypingResult,
     setGoal,
+    setCalibration,
     setBiometrics,
     setTastePreferences,
     setDietaryRestrictions,

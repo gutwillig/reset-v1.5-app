@@ -618,26 +618,33 @@ export function EsterChatScreen() {
                 { backgroundColor: colors.listeningPillBg },
               ]}
             >
-              <ListeningWaveform color={colors.listeningPillText} active />
+              <View style={styles.listeningTopRow}>
+                <View style={styles.listeningWaveformWrap}>
+                  <ListeningWaveform color={colors.listeningPillText} active />
+                </View>
+                <Text style={[styles.listeningDuration, { color: colors.listeningPillText }]}>
+                  {formatDuration(recordSeconds)}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.sendCircle, { backgroundColor: colors.sendCircleBg }]}
+                  onPress={submitVoiceTranscript}
+                  activeOpacity={0.85}
+                >
+                  <SendArrowIcon color={colors.sendArrowColor} />
+                </TouchableOpacity>
+              </View>
               <Text
                 style={[
                   styles.listeningTranscript,
-                  { color: transcript ? colors.listeningPillText : colors.listeningTranscriptMuted },
+                  {
+                    color: transcript
+                      ? colors.listeningPillText
+                      : colors.listeningTranscriptMuted,
+                  },
                 ]}
-                numberOfLines={1}
               >
                 {transcript || "Listening…"}
               </Text>
-              <Text style={[styles.listeningDuration, { color: colors.listeningPillText }]}>
-                {formatDuration(recordSeconds)}
-              </Text>
-              <TouchableOpacity
-                style={[styles.sendCircle, { backgroundColor: colors.sendCircleBg }]}
-                onPress={submitVoiceTranscript}
-                activeOpacity={0.85}
-              >
-                <SendArrowIcon color={colors.sendArrowColor} />
-              </TouchableOpacity>
             </View>
           )}
 
@@ -1254,17 +1261,29 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   listeningPill: {
+    borderRadius: 28,
+    paddingTop: 8,
+    paddingBottom: 14,
+    paddingHorizontal: 12,
+    gap: 6,
+    maxHeight: 220,
+  },
+  listeningTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    height: 52,
-    borderRadius: 26,
-    paddingLeft: 16,
-    paddingRight: 6,
+    height: 40,
     gap: 8,
   },
-  listeningTranscript: {
+  listeningWaveformWrap: {
     flex: 1,
-    fontSize: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  listeningTranscript: {
+    fontSize: 15,
+    lineHeight: 20,
+    paddingHorizontal: 8,
   },
   listeningDuration: {
     fontSize: 13,

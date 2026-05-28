@@ -21,7 +21,8 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
-import { K } from "../../constants/colors";
+import { K, toMetabolicType } from "../../constants/colors";
+import { useApp } from "../../context/AppContext";
 import { fonts, spacing, radius } from "../../constants/typography";
 import { useAppPalette } from "../../hooks/useAppPalette";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -37,6 +38,14 @@ const PENDING_NEW_CHAT_KEY = "@reset_pending_new_chat";
 
 const ESTER_AVATAR_LIGHT = require("../../../assets/images/ester-avatar.png");
 const ESTER_AVATAR_DARK = require("../../../assets/images/ester-avatar-silver.png");
+
+const TYPE_LOGO = {
+  Burner: require("../../../assets/images/type-logos/Burner.png"),
+  Rebounder: require("../../../assets/images/type-logos/Rebounder.png"),
+  Ember: require("../../../assets/images/type-logos/Restorer.png"),
+  Chameleon: require("../../../assets/images/type-logos/Chameleon.png"),
+  Explorer: require("../../../assets/images/type-logos/Explorer.png"),
+};
 
 type ChatRouteParams = {
   EsterChat: {
@@ -111,6 +120,10 @@ export function EsterChatScreen() {
 
   const evening = palette.evening;
   const esterAvatar = evening ? ESTER_AVATAR_DARK : ESTER_AVATAR_LIGHT;
+  const { state } = useApp();
+  const metabolicType =
+    toMetabolicType(state.user.metabolicType) ?? "Explorer";
+  const headerLogo = TYPE_LOGO[metabolicType];
 
   // Palette-aware colors (kept inside the component so they react to time-of-day)
   const colors = useMemo(() => {
@@ -483,7 +496,7 @@ export function EsterChatScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.headerCenter}>
-            <Image source={esterAvatar} style={styles.headerAvatar} resizeMode="contain" />
+            <Image source={headerLogo} style={styles.headerAvatar} resizeMode="contain" />
           </View>
           <View style={styles.headerRightGroup}>
             <TouchableOpacity
@@ -1037,16 +1050,10 @@ function PlusIcon({ color }: { color: string }) {
 
 function MuteIcon({ color }: { color: string }) {
   return (
-    <Svg width={22} height={22} viewBox="0 0 22 22">
+    <Svg width={21} height={14} viewBox="0 0 21 14" fill="none">
       <Path
-        d="M3 8.5 V13.5 H6.5 L11 17 V5 L6.5 8.5 Z"
+        d="M16.378 7.90892L13.9595 10.3277C13.7979 10.4891 13.5948 10.5717 13.3502 10.5756C13.1058 10.5793 12.899 10.4967 12.7298 10.3277C12.5608 10.1585 12.4763 9.9536 12.4763 9.71288C12.4763 9.47216 12.5608 9.26721 12.7298 9.09805L15.1486 6.67955L12.7298 4.26105C12.5684 4.09946 12.4859 3.89637 12.4822 3.65175C12.4783 3.40734 12.5608 3.20055 12.7298 3.03138C12.899 2.86241 13.1039 2.77792 13.3446 2.77792C13.5855 2.77792 13.7905 2.86241 13.9595 3.03138L16.378 5.45017L18.7965 3.03138C18.958 2.86999 19.1611 2.78735 19.4057 2.78346C19.6504 2.77977 19.8572 2.86241 20.0261 3.03138C20.1951 3.20055 20.2796 3.40549 20.2796 3.64621C20.2796 3.88694 20.1951 4.09188 20.0261 4.26105L17.6073 6.67955L20.0261 9.09805C20.1877 9.25963 20.2703 9.46273 20.274 9.70734C20.2777 9.95175 20.1951 10.1585 20.0261 10.3277C19.8572 10.4967 19.6522 10.5812 19.4113 10.5812C19.1706 10.5812 18.9656 10.4967 18.7965 10.3277L16.378 7.90892ZM4.33008 9.59621H1.05437C0.753764 9.59621 0.502833 9.49559 0.301583 9.29434C0.100528 9.09328 0 8.84235 0 8.54155V4.81755C0 4.51674 0.100528 4.26581 0.301583 4.06475C0.502833 3.8635 0.753764 3.76288 1.05437 3.76288H4.33008L7.82104 0.271922C8.10065 -0.0076896 8.42256 -0.0716623 8.78675 0.0800044C9.15094 0.231865 9.33304 0.506713 9.33304 0.904547V12.4545C9.33304 12.8524 9.15094 13.1272 8.78675 13.2791C8.42256 13.4308 8.10065 13.3668 7.82104 13.0872L4.33008 9.59621ZM7.58304 3.00455L5.07471 5.51288H1.74971V7.84621H5.07471L7.58304 10.3545V3.00455Z"
         fill={color}
-      />
-      <Path
-        d="M14.5 8 L19 12.5 M19 8 L14.5 12.5"
-        stroke={color}
-        strokeWidth={1.6}
-        strokeLinecap="round"
       />
     </Svg>
   );
@@ -1134,8 +1141,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerAvatar: {
-    width: 38,
-    height: 38,
+    width: 53,
+    height: 53,
   },
   loadingContainer: {
     flex: 1,

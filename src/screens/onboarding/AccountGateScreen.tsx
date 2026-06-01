@@ -129,7 +129,10 @@ export function AccountGateScreen({ navigation }: Props) {
     // RES-119: the 3-card reveal flow is now part of every onboarding, not
     // gated on a real scan — TypeRevealScreen falls back to a placeholder
     // score when biometrics are missing.
-    navigation.navigate("TypeReveal");
+    //
+    // reset (not navigate) so the now-stale account screens leave the stack —
+    // a signed-up user must never be able to land back on a sign-up screen.
+    navigation.reset({ index: 0, routes: [{ name: "TypeReveal" }] });
   };
 
   const handleAppleSignIn = async () => {

@@ -15,7 +15,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     backgroundColor: "#361416",
   },
   ios: {
-    supportsTablet: true,
+    supportsTablet: false,
     bundleIdentifier: "com.betterwell.reset.dev",
     // usesAppleSignIn: true, // TODO: re-enable once added to paid dev team
     entitlements: {

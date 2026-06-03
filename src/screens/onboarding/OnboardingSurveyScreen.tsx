@@ -144,11 +144,31 @@ export function OnboardingSurveyScreen({ navigation, route }: Props) {
   // and hands off to AccountGate.
   useEffect(() => {
     if (step.kind === "question") return;
-    if (step.kind === "analyzing") {
-      const t = setTimeout(() => navigation.replace("AccountGate"), step.durationMs);
-      return () => clearTimeout(t);
+
+    const advance =
+      step.kind === "analyzing"
+        ? () => navigation.replace("AccountGate")
+        : goNext;
+
+    // Video beats (logo / analyzing): advance the moment the intro video
+    // finishes so it always plays through, regardless of how long it takes
+    // to start. durationMs is only a fallback in case playToEnd never fires.
+    if (step.kind === "logo" || step.kind === "analyzing") {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        advance();
+      };
+      const sub = introPlayer.addListener("playToEnd", finish);
+      const fallback = setTimeout(finish, step.durationMs);
+      return () => {
+        sub.remove();
+        clearTimeout(fallback);
+      };
     }
-    // logo / message
+
+    // message beat: no video, fixed timer.
     const t = setTimeout(goNext, (step as any).durationMs ?? 2000);
     return () => clearTimeout(t);
   }, [stepIndex]);

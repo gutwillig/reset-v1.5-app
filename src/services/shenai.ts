@@ -136,10 +136,14 @@ export async function initShenAI(
     measurementPreset: MeasurementPreset.THIRTY_SECONDS_ALL_METRICS,
     precisionMode: PrecisionMode.RELAXED,
     cameraMode: CameraMode.FACING_USER,
-    // RES-133: SDK 3.x defaults to on-demand server models. Force fully
-    // on-device processing so biometric/face data never leaves the device
-    // (matches our App Store privacy + medical-device declarations).
-    offlineProcessing: true,
+    // RES-133: SDK 3.x defaults to "on-demand server models" — the model
+    // files are fetched to the device, then inference runs locally. We use
+    // that default path because forcing `offlineProcessing: true` pushed the
+    // scan onto a heavier fully-local path that the device couldn't keep up
+    // with in real time, degrading signal quality and making scans hard to
+    // complete (build 44). TODO: confirm with MX Labs that this default does
+    // not upload biometric/face data before relying on it for the App Store
+    // privacy declaration.
     // SDK 3.x introduced UI V2/V3. Pin V1 to preserve the 2.11.6 scan UX
     // (face-positioning overlay only, our own React UI layered on top).
     uiVersion: UiVersion.V1,
@@ -147,7 +151,9 @@ export async function initShenAI(
     showFacePositioningOverlay: true,
     showVisualWarnings: false,
     showFaceMask: false,
-    showBloodFlow: false,
+    // Blood-flow visualization animated over the user's face during the
+    // measurement (the effect ShenAI flagged for us).
+    showBloodFlow: true,
     showStartStopButton: false,
     showInfoButton: false,
     hideShenaiLogo: true,

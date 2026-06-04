@@ -14,6 +14,7 @@ import {
   PrecisionMode,
   OnboardingMode,
   CameraMode,
+  UiVersion,
   Gender,
   FaceState as SdkFaceState,
   MeasurementState as SdkMeasurementState,
@@ -135,11 +136,26 @@ export async function initShenAI(
     measurementPreset: MeasurementPreset.THIRTY_SECONDS_ALL_METRICS,
     precisionMode: PrecisionMode.RELAXED,
     cameraMode: CameraMode.FACING_USER,
+    // RES-133: SDK 3.x defaults to "on-demand server models" — the model
+    // files are fetched to the device, then inference runs locally. We use
+    // that default path because forcing `offlineProcessing: true` pushed the
+    // scan onto a heavier fully-local path that the device couldn't keep up
+    // with in real time, degrading signal quality and making scans hard to
+    // complete (build 44). TODO: confirm with MX Labs that this default does
+    // not upload biometric/face data before relying on it for the App Store
+    // privacy declaration.
+    // SDK 3.x introduced UI V2/V3. Pin V1 to preserve the 2.11.6 scan UX
+    // (face-positioning overlay only, our own React UI layered on top).
+    uiVersion: UiVersion.V1,
     showUserInterface: true,
     showFacePositioningOverlay: true,
-    showVisualWarnings: false,
-    showFaceMask: false,
-    showBloodFlow: false,
+    // Red low-signal indicator so the user knows to hold still / fix lighting.
+    showVisualWarnings: true,
+    // 3D face-mask mesh rendered over the face on the camera feed.
+    showFaceMask: true,
+    // Blood-flow visualization animated over the user's face during the
+    // measurement (the effect ShenAI flagged for us).
+    showBloodFlow: true,
     showStartStopButton: false,
     showInfoButton: false,
     hideShenaiLogo: true,
@@ -178,7 +194,7 @@ export async function initShenAI(
   }
 }
 
-// In v2.11.6, measurement starts automatically when in MEASURE mode and face is detected
+// Measurement starts automatically when in MEASURE mode and a face is detected.
 export async function startScan(): Promise<void> {
   await setOperatingMode(OperatingMode.MEASURE);
 }
@@ -228,7 +244,7 @@ export async function getFaceStateValue(): Promise<FaceState> {
   return FACE_STATE_MAP[state] ?? "NOT_VISIBLE";
 }
 
-// In v2.11.6, readiness is determined by face state being OK
+// Readiness is determined by face state being OK.
 export async function isReady(): Promise<boolean> {
   const face = await sdkGetFaceState();
   return face === SdkFaceState.OK;
@@ -245,6 +261,9 @@ const MEASUREMENT_STATE_MAP: Record<number, MeasurementState> = {
   [SdkMeasurementState.RUNNING_SIGNAL_GOOD]: "RUNNING",
   [SdkMeasurementState.RUNNING_SIGNAL_BAD]: "RUNNING",
   [SdkMeasurementState.RUNNING_SIGNAL_BAD_DEVICE_UNSTABLE]: "RUNNING",
+  // RES-133: SDK 3.x added FINALIZING (capture done, computing final result).
+  // Treat as still-running so the UI doesn't snap back to "not started".
+  [SdkMeasurementState.FINALIZING]: "RUNNING",
   [SdkMeasurementState.FINISHED]: "FINISHED",
   [SdkMeasurementState.FAILED]: "FAILED",
 };

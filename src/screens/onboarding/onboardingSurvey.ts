@@ -34,8 +34,10 @@ export type SurveyStep =
   | { kind: "analyzing"; text: string; progress: number; durationMs: number };
 
 export const SURVEY_STEPS: SurveyStep[] = [
-  // Post-scan intro video is ~4.7s; advance when it finishes.
-  { kind: "logo", durationMs: 4800 },
+  // Post-scan intro video is ~5.4s. The screen advances when the video
+  // actually finishes (playToEnd); durationMs is only a fallback cap, so it
+  // must sit comfortably above the video length to avoid cutting it off.
+  { kind: "logo", durationMs: 7000 },
   {
     kind: "message",
     lines: [
@@ -100,8 +102,9 @@ export const SURVEY_STEPS: SurveyStep[] = [
     kind: "analyzing",
     text: "Analyzing your responses",
     progress: 0.96,
-    // Match the analyzing-video length (same MP4 as the post-scan intro).
-    durationMs: 4800,
+    // Same video as the post-scan intro (~5.4s). Advances on playToEnd;
+    // durationMs is only the fallback cap (see the "logo" step above).
+    durationMs: 7000,
   },
 ];
 

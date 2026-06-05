@@ -273,8 +273,14 @@ function PlanCard({
 }
 
 export function PaywallScreen({ navigation }: Props) {
-  const { setHomeV2Enabled, completeOnboarding, setSubscriptionTier } = useApp();
+  const { state, setHomeV2Enabled, completeOnboarding, setSubscriptionTier } =
+    useApp();
   const toast = useToast();
+  // Gate mode: the Paywall doubles as a hard wall for free users who have
+  // already finished onboarding (RootNavigator routes them here instead of
+  // Main). In that mode there is no "skip into the app" — subscribing flips the
+  // tier to 'pro', which re-renders RootNavigator straight into Main.
+  const isGate = state.user.hasCompletedOnboarding;
   // Yearly is the default per Figma (the highlighted card on first render).
   const [selectedPlan, setSelectedPlan] = React.useState<"monthly" | "yearly">(
     "yearly"
@@ -343,20 +349,18 @@ export function PaywallScreen({ navigation }: Props) {
     }, 80);
   };
 
-  const handleClose = () => {
-    logEvent("onboarding_paywall_close");
-    setHomeV2Enabled(true);
-    completeOnboarding();
-  };
-
   const handleSubscribe = async () => {
     if (purchasing || restoring) return;
     logEvent("onboarding_paywall_subscribe", { plan: selectedPlan });
     const pkg = selectedPlan === "monthly" ? monthlyPkg : annualPkg;
-    // No live package (dashboard not set up yet) — preserve the prior
-    // placeholder behavior so onboarding is never blocked.
     if (!pkg) {
-      proceedToApp();
+      // No live package. In onboarding we never block the flow; in the gate we
+      // must not grant free access, so surface an error and stay on the wall.
+      if (isGate) {
+        toast.show({ message: "Couldn't load subscription. Please try again." });
+      } else {
+        proceedToApp();
+      }
       return;
     }
     setPurchasing(true);
@@ -369,10 +373,11 @@ export function PaywallScreen({ navigation }: Props) {
     }
     if (outcome.isPro) {
       // Optimistic local flip; the backend reconciles via RevenueCat webhook
-      // and getProfile() re-syncs the tier on next launch.
+      // and getProfile() re-syncs the tier on next launch. In the gate, this
+      // re-renders RootNavigator straight into Main (no proceedToApp needed).
       setSubscriptionTier("pro");
     }
-    proceedToApp();
+    if (!isGate) proceedToApp();
   };
 
   const handleRestore = async () => {
@@ -384,7 +389,7 @@ export function PaywallScreen({ navigation }: Props) {
     if (outcome.isPro) {
       setSubscriptionTier("pro");
       toast.show({ message: "Subscription restored", icon: "✓" });
-      proceedToApp();
+      if (!isGate) proceedToApp();
     } else {
       toast.show({ message: "No active subscription found to restore." });
     }
@@ -410,9 +415,8 @@ export function PaywallScreen({ navigation }: Props) {
             positioned at center per Figma so it sits dead-center regardless
             of the placeholder/X widths. */}
         <View style={styles.topPlaceholder} />
-        <TouchableOpacity onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
-          <CloseIcon color={WHITE} size={24} />
-        </TouchableOpacity>
+        {/* No skip — the paywall is a hard wall in both onboarding and the
+            post-onboarding gate; free users must subscribe to enter the app. */}
         <Image source={RESET_LOGO} style={styles.topLogo} resizeMode="contain" />
       </View>
 
@@ -514,7 +518,6 @@ const styles = StyleSheet.create({
     marginLeft: -22,
     top: 0,
   },
-  closeBtn: { padding: 8 },
 
   // Body
   body: {

@@ -33,7 +33,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
   android: {
-    minSdkVersion: 26,
     package: "com.betterwell.reset.dev",
     permissions: ["RECORD_AUDIO"],
     adaptiveIcon: {
@@ -50,6 +49,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-font",
     "expo-video",
     "expo-audio",
+    [
+      // ShenAI SDK requires Android minSdk 26. app.config's android.minSdkVersion
+      // is not a real Expo field (it was silently ignored, so prebuild fell back
+      // to the SDK default of 24 and the manifest merge failed). Set it the
+      // canonical way via build properties.
+      "expo-build-properties",
+      {
+        android: {
+          minSdkVersion: 26,
+        },
+      },
+    ],
     // "expo-apple-authentication", // TODO: re-enable once added to paid dev team
     [
       "expo-camera",

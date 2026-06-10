@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -70,6 +70,12 @@ export function CreateAccountScreen({ navigation }: Props) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-advance focus (RES-136): "next" on the keyboard tabs to the
+  // following field; the last field submits.
+  const lastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   // Password rules: min 8, uppercase, number, symbol
   const passwordOk =
@@ -194,10 +200,14 @@ export function CreateAccountScreen({ navigation }: Props) {
                   autoCapitalize="words"
                   autoCorrect={false}
                   editable={!isLoading}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => lastNameRef.current?.focus()}
                 />
               </View>
               <View style={[styles.field, styles.rowField]}>
                 <TextInput
+                  ref={lastNameRef}
                   style={styles.input}
                   value={lastName}
                   onChangeText={setLastName}
@@ -206,12 +216,16 @@ export function CreateAccountScreen({ navigation }: Props) {
                   autoCapitalize="words"
                   autoCorrect={false}
                   editable={!isLoading}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => emailRef.current?.focus()}
                 />
               </View>
             </View>
 
             <View style={styles.field}>
               <TextInput
+                ref={emailRef}
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
@@ -221,12 +235,16 @@ export function CreateAccountScreen({ navigation }: Props) {
                 keyboardType="email-address"
                 autoCorrect={false}
                 editable={!isLoading}
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
             </View>
 
             <View>
               <View style={[styles.field, styles.passwordField]}>
                 <TextInput
+                  ref={passwordRef}
                   style={[styles.input, { flex: 1 }]}
                   value={password}
                   onChangeText={setPassword}
@@ -236,6 +254,8 @@ export function CreateAccountScreen({ navigation }: Props) {
                   autoCapitalize="none"
                   autoCorrect={false}
                   editable={!isLoading}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSubmit}
                 />
                 <TouchableOpacity
                   onPress={() => setPasswordVisible((v) => !v)}

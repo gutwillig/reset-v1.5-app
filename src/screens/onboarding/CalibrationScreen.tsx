@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -49,6 +49,12 @@ export function CalibrationScreen({ navigation }: Props) {
   const [weightLb, setWeightLb] = useState("");
   const [age, setAge] = useState("");
   const [sex, setSex] = useState<"female" | "male" | null>(null);
+
+  // Auto-advance focus (RES-136): the number-pad keyboard has no "next" key,
+  // so we jump to the next field as soon as a fixed-width one fills up.
+  const inchesRef = useRef<TextInput>(null);
+  const weightRef = useRef<TextInput>(null);
+  const ageRef = useRef<TextInput>(null);
 
   useEffect(() => {
     logEvent("onboarding_calibration");
@@ -115,7 +121,10 @@ export function CalibrationScreen({ navigation }: Props) {
                     <TextInput
                       style={styles.input}
                       value={feet}
-                      onChangeText={setFeet}
+                      onChangeText={(t) => {
+                        setFeet(t);
+                        if (t.length === 1) inchesRef.current?.focus();
+                      }}
                       placeholder="5"
                       placeholderTextColor={MUTED}
                       keyboardType="number-pad"
@@ -125,9 +134,13 @@ export function CalibrationScreen({ navigation }: Props) {
                   </View>
                   <View style={styles.unitInput}>
                     <TextInput
+                      ref={inchesRef}
                       style={styles.input}
                       value={inches}
-                      onChangeText={setInches}
+                      onChangeText={(t) => {
+                        setInches(t);
+                        if (t.length === 2) weightRef.current?.focus();
+                      }}
                       placeholder="9"
                       placeholderTextColor={MUTED}
                       keyboardType="number-pad"
@@ -141,9 +154,13 @@ export function CalibrationScreen({ navigation }: Props) {
               <Field label="Weight">
                 <View style={styles.unitInput}>
                   <TextInput
+                    ref={weightRef}
                     style={styles.input}
                     value={weightLb}
-                    onChangeText={setWeightLb}
+                    onChangeText={(t) => {
+                      setWeightLb(t);
+                      if (t.length === 3) ageRef.current?.focus();
+                    }}
                     placeholder="150"
                     placeholderTextColor={MUTED}
                     keyboardType="number-pad"
@@ -156,6 +173,7 @@ export function CalibrationScreen({ navigation }: Props) {
               <Field label="Age">
                 <View style={styles.unitInput}>
                   <TextInput
+                    ref={ageRef}
                     style={styles.input}
                     value={age}
                     onChangeText={setAge}
@@ -168,7 +186,7 @@ export function CalibrationScreen({ navigation }: Props) {
                 </View>
               </Field>
 
-              <Field label="Biological sex">
+              <Field label="Gender">
                 <View style={styles.sexRow}>
                   {(["female", "male"] as const).map((option) => (
                     <TouchableOpacity

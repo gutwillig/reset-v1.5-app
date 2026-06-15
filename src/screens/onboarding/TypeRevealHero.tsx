@@ -29,7 +29,9 @@ export function TypeRevealHero({
   style: object;
 }) {
   const player = useVideoPlayer(TYPE_VIDEO[type], (p) => {
-    p.loop = false;
+    // Loop so the reveal animation keeps playing continuously instead of
+    // freezing on its last frame after the first pass.
+    p.loop = true;
     p.muted = true;
     p.pause();
   });

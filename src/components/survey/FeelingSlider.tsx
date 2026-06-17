@@ -1,10 +1,12 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  PanResponder,
+  ScrollView,
   LayoutChangeEvent,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import Svg, { Path, G, Defs, LinearGradient, Stop } from "react-native-svg";
 import { K, TC, toMetabolicType } from "../../constants/colors";
@@ -73,35 +75,37 @@ export function FeelingSlider({ value, onChange }: FeelingSliderProps) {
   const { state } = useApp();
   const metabolicType = toMetabolicType(state.user.metabolicType) ?? "Explorer";
   const ACTIVE = TC[metabolicType].bg;
-  const widthRef = useRef(0);
-  const grantValueRef = useRef(value);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        if (widthRef.current <= 0) return;
-        const x = e.nativeEvent.locationX;
-        const pct = Math.max(0, Math.min(100, (x / widthRef.current) * 100));
-        const rounded = Math.round(pct);
-        grantValueRef.current = rounded;
-        onChange(rounded);
-      },
-      onPanResponderMove: (_, gesture) => {
-        if (widthRef.current <= 0) return;
-        const dxPct = (gesture.dx / widthRef.current) * 100;
-        const next = Math.max(
-          0,
-          Math.min(100, grantValueRef.current + dxPct),
-        );
-        onChange(Math.round(next));
-      },
-    }),
-  ).current;
+  // RES-144: a native horizontal ScrollView drives the value instead of a
+  // PanResponder drag. Nested orthogonal scrolling lets the parent vertical
+  // survey ScrollView keep vertical pans while this owns horizontal ones, so the
+  // gesture is reliable (the old pan drag was being stolen by the parent).
+  const [trackWidth, setTrackWidth] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const didInit = useRef(false);
 
   const handleLayout = (e: LayoutChangeEvent) => {
-    widthRef.current = e.nativeEvent.layout.width;
+    setTrackWidth(e.nativeEvent.layout.width);
+  };
+
+  // Scroll offset maps to the 0–100 value, inverted so the knob tracks the
+  // finger: a ScrollView's content moves opposite the finger, so swiping right
+  // (offset decreases) must raise the value (knob moves right).
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (trackWidth <= 0) return;
+    const x = e.nativeEvent.contentOffset.x;
+    const pct = Math.max(0, Math.min(100, 100 - (x / trackWidth) * 100));
+    onChange(Math.round(pct));
+  };
+
+  // Once the content is laid out, jump the scroll position to match `value`
+  // (default 50 → centered) so the knob starts where it should. One-shot.
+  const handleContentSizeChange = () => {
+    if (didInit.current || trackWidth <= 0) return;
+    didInit.current = true;
+    scrollRef.current?.scrollTo({
+      x: ((100 - value) / 100) * trackWidth,
+      animated: false,
+    });
   };
 
   const band = bandFor(value);
@@ -164,11 +168,7 @@ export function FeelingSlider({ value, onChange }: FeelingSliderProps) {
         <Text style={styles.label}>{band.label}</Text>
       </View>
 
-      <View
-        style={styles.track}
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
-      >
+      <View style={styles.track} onLayout={handleLayout}>
         <Svg
           width="100%"
           height="100%"
@@ -228,6 +228,28 @@ export function FeelingSlider({ value, onChange }: FeelingSliderProps) {
             <View style={styles.handleBar} />
           </View>
         </View>
+        {/* Transparent horizontal scroll overlay — owns the drag gesture and
+            drives `value`. Snaps to the 5 dot positions (value 0/25/50/75/100,
+            one per feeling band). The visuals above render from `value`. */}
+        {trackWidth > 0 ? (
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            bounces={false}
+            showsHorizontalScrollIndicator={false}
+            style={StyleSheet.absoluteFill}
+            contentContainerStyle={{ width: trackWidth * 2 }}
+            snapToInterval={trackWidth / 4}
+            snapToAlignment="start"
+            disableIntervalMomentum
+            decelerationRate="fast"
+            scrollEventThrottle={16}
+            onScroll={handleScroll}
+            onContentSizeChange={handleContentSizeChange}
+          >
+            <View style={styles.scrollSpacer} />
+          </ScrollView>
+        ) : null}
       </View>
     </View>
   );
@@ -264,6 +286,9 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 35 / 6,
     position: "relative",
+  },
+  scrollSpacer: {
+    height: "100%",
   },
   handle: {
     position: "absolute",

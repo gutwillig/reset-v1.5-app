@@ -107,6 +107,21 @@ const PROFILE_COPY: Record<
   },
 };
 
+// RES-139: the "Your goal" card now reflects the user's actual onboarding goal
+// answer (layer1.goal slug from onboardingSurvey.ts), sprucified into Ester's
+// voice. Falls back to the per-type PROFILE_COPY.goal when no goal is stored
+// (older accounts). Single place to edit this wording.
+const GOAL_COPY: Record<string, string> = {
+  weight_loss:
+    "Lose weight in a way that lasts — I'll keep your meals satisfying so the change actually sticks.",
+  training:
+    "Train with purpose — I'll time your meals to fuel the work and sharpen your recovery.",
+  maintain_weight:
+    "Hold your steady state — balanced, consistent meals to keep you right where you want to be.",
+  understand_food_impact:
+    "Tune into your body — I'll help you see how different foods really move your energy and recovery.",
+};
+
 const HEADER_HEIGHT = 344;
 
 type TrendDirection = "up" | "down" | "same" | null;
@@ -253,6 +268,8 @@ export function ProfileScreen() {
   const typeConfig = TYPE_CONFIGS[metabolicType];
   const typeDisplay = TYPE_DISPLAY[metabolicType];
   const copy = PROFILE_COPY[metabolicType];
+  // Prefer the user's actual onboarding goal answer; fall back to per-type copy.
+  const goalText = GOAL_COPY[profile?.layer1?.goal ?? ""] ?? copy.goal;
   const primary = TYPE_PRIMARY[metabolicType];
   const tint = TYPE_TINT[metabolicType];
 
@@ -461,7 +478,7 @@ export function ProfileScreen() {
           <Section eyebrow="Your goal" eyebrowColor={surfaces.textStrong} dotColor={primary}>
             <View style={styles.blueCard}>
               <TypeGradientFill type={metabolicType} idKey="goal" />
-              <Text style={styles.blueCardBody}>{copy.goal}</Text>
+              <Text style={styles.blueCardBody}>{goalText}</Text>
               <View style={styles.ghostArrowButton}>
                 <ArrowForwardIcon />
               </View>

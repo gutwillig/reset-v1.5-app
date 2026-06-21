@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Circle, Rect } from "react-native-svg";
 import Markdown from "react-native-markdown-display";
 import {
   ExpoSpeechRecognitionModule,
@@ -111,6 +111,13 @@ export function EsterChatScreen() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
+  // The multiline keyboard input grows to fit its text (scrollEnabled={false}),
+  // but iOS reports a stale tall content size for ~1s after the field is cleared
+  // — so on send the pill stays two lines tall with the caret/placeholder pinned
+  // to its top, then collapses (the "jump"). Remounting the field on send via a
+  // changing key sidesteps the lag entirely: the fresh field is one line at once,
+  // and autoFocus keeps it focused so typing continues uninterrupted.
+  const [inputResetKey, setInputResetKey] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
   // True only during the gap between the user sending and Ester's reply
   // starting to present — drives the call-view loading dots.
@@ -118,9 +125,15 @@ export function EsterChatScreen() {
   const [chatSessionId, setChatSessionId] = useState<string | undefined>();
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [inputMode, setInputMode] = useState<InputMode>("voice");
+  // Text/typing is the default mode; the right-side button toggles to voice.
+  const [inputMode, setInputMode] = useState<InputMode>("keyboard");
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
+  // Voice is "dictation": entering voice mode keeps any existing typed draft and
+  // APPENDS the spoken words to it. This holds the draft captured when recording
+  // started so the live bubble can show base + transcript and the stop button can
+  // commit the combined text back into the editable field.
+  const voiceBaseRef = useRef("");
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(0);
   const recordStartRef = useRef<number | null>(null);
@@ -379,9 +392,21 @@ export function EsterChatScreen() {
   const startListening = async () => {
     // Don't let Ester's voice bleed into the mic while the user is talking.
     stopSpeaking();
+    // Capture the current typed draft so speech APPENDS to it (dictation can add
+    // to a message in progress; empty when starting fresh).
+    voiceBaseRef.current = inputText;
+    // Switch to voice mode and show the listening UI up front so tapping the
+    // voice button goes straight to the recording pill with no flash of an idle
+    // voice bubble during the async permission/start gap. Reverted on failure.
+    setInputMode("voice");
+    setIsListening(true);
     try {
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!result.granted) return;
+      if (!result.granted) {
+        setIsListening(false);
+        setInputMode("keyboard");
+        return;
+      }
 
       // Defensive cleanup so iOS's SFSpeechRecognizer can re-arm cleanly when
       // the user taps Tap-to-speak again after submitting.
@@ -436,6 +461,8 @@ export function EsterChatScreen() {
     }
     recordStartRef.current = null;
     setIsListening(false);
+    // Recording always ends back in text/typing mode (the default).
+    setInputMode("keyboard");
     try {
       ExpoSpeechRecognitionModule.stop();
     } catch {
@@ -445,6 +472,7 @@ export function EsterChatScreen() {
 
   const cancelListening = () => {
     setTranscript("");
+    voiceBaseRef.current = "";
     stopListening();
   };
 
@@ -656,12 +684,24 @@ export function EsterChatScreen() {
     } catch {}
   };
 
-  const submitVoiceTranscript = async () => {
-    const finalText = transcript.trim();
+  // The live voice draft = the typed text we started from + the spoken words.
+  const composeVoiceDraft = () => {
+    const base = voiceBaseRef.current.trim();
+    const spoken = transcript.trim();
+    if (base && spoken) return `${base} ${spoken}`;
+    return base || spoken;
+  };
+
+  // Stop button (Option B — review, don't auto-send): end recognition and drop
+  // the recognized text into the editable field back in text mode. The user
+  // reviews/edits, then taps the send arrow (or Return) to send. Re-entering
+  // voice from here appends again.
+  const commitVoiceDraft = () => {
+    const draft = composeVoiceDraft();
     stopListening();
-    if (!finalText) return;
-    await sendText(finalText);
+    setInputText(draft);
     setTranscript("");
+    voiceBaseRef.current = "";
   };
 
   const sendText = async (text: string) => {
@@ -676,6 +716,8 @@ export function EsterChatScreen() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
+    // Remount the input so it collapses to one line at once (no stale-height jump).
+    setInputResetKey((k) => k + 1);
     setIsTyping(true);
     setAwaitingReply(true);
 
@@ -755,6 +797,7 @@ export function EsterChatScreen() {
     }
     setMessages([defaultGreeting]);
     setInputText("");
+    setInputResetKey((k) => k + 1);
     await AsyncStorage.setItem(PENDING_NEW_CHAT_KEY, "true");
   };
 
@@ -1032,7 +1075,7 @@ export function EsterChatScreen() {
 
         {/* Bottom input area — voice CTA | listening pill | keyboard input */}
         <View style={styles.bottomBar}>
-          {inputMode === "voice" && !isListening && (
+          {inputMode === "voice" && (
             <View style={[styles.inputPill, styles.inputPillVoice]}>
               <LiquidGlass
                 style={StyleSheet.absoluteFill}
@@ -1042,14 +1085,94 @@ export function EsterChatScreen() {
                 overlayAndroid="rgba(40,20,22,0.45)"
                 shine
               />
+              {/* Voice mode reuses the same frosted pill as text mode. The text
+                  area shows the live draft (any text we started from + the
+                  spoken words), or a "Listening…" placeholder until words land;
+                  the right disc is the circle+square stop glyph. When not
+                  listening (rare fallback) the placeholder reads "Type
+                  anything…" and tapping it drops back to text mode. */}
               <TouchableOpacity
                 style={styles.tapToSpeakHit}
-                onPress={() => setInputMode("keyboard")}
-                activeOpacity={0.7}
+                onPress={isListening ? undefined : () => setInputMode("keyboard")}
+                activeOpacity={isListening ? 1 : 0.7}
+                disabled={isListening}
               >
-                <Text style={styles.tapToSpeakText}>Type anything...</Text>
+                <Text
+                  style={[
+                    styles.inputPlaceholderText,
+                    composeVoiceDraft() ? { color: K.bone } : null,
+                  ]}
+                  numberOfLines={3}
+                >
+                  {composeVoiceDraft() ||
+                    (isListening ? "Listening…" : "Type anything…")}
+                </Text>
               </TouchableOpacity>
-              {/* Voice button — frosted "Liquid Glass" disc + graphic-eq icon */}
+              <TouchableOpacity
+                style={styles.inputSideButton}
+                onPress={isListening ? commitVoiceDraft : startListening}
+                activeOpacity={0.85}
+                accessibilityLabel={isListening ? "Stop recording" : "Speak to Ester"}
+              >
+                <LiquidGlass
+                  style={StyleSheet.absoluteFill}
+                  intensity={24}
+                  tint="light"
+                  overlay="rgba(0,0,0,0)"
+                  overlayAndroid="rgba(0,0,0,0)"
+                  fills={["rgba(255,255,255,0.88)", "rgba(153,153,153,0.18)"]}
+                  shine
+                />
+                <StopRecordingIcon size={38} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {inputMode === "keyboard" && (
+            <View style={[styles.inputPill, styles.inputPillVoice]}>
+              <LiquidGlass
+                style={StyleSheet.absoluteFill}
+                intensity={30}
+                tint="light"
+                overlay="rgba(255,255,255,0.1)"
+                overlayAndroid="rgba(40,20,22,0.45)"
+                shine
+              />
+              {/* Custom placeholder. A multiline iOS TextInput top-aligns its
+                  native placeholder, and on clear the field's measured height
+                  lags ~1s before collapsing to one line — so the native
+                  placeholder renders high then drops ("jumps") on send. Ours is
+                  centered against the pill, independent of the field height, so
+                  it never moves. */}
+              {!inputText ? (
+                <View style={styles.inputPlaceholder} pointerEvents="none">
+                  <Text style={styles.inputPlaceholderText}>Type anything…</Text>
+                </View>
+              ) : null}
+              <TextInput
+                key={`kbinput-${inputResetKey}`}
+                style={[styles.input, { color: K.bone }]}
+                value={inputText}
+                onChangeText={setInputText}
+                onSubmitEditing={handleKeyboardSend}
+                // Multiline + scrollEnabled={false} grows the field to fit the
+                // text so a long message wraps and stays fully visible. The key
+                // (bumped on send) remounts the field on clear so it collapses to
+                // one line instantly instead of riding iOS's stale tall content
+                // size. submitBehavior="submit" makes Return fire onSubmitEditing
+                // WITHOUT inserting a newline (keeps the keyboard up).
+                multiline
+                scrollEnabled={false}
+                submitBehavior="submit"
+                maxLength={500}
+                returnKeyType="send"
+                // No autoFocus: text mode is the default, so auto-focusing would
+                // pop the keyboard on entry and cover the call visuals. The field
+                // focuses when the user taps it.
+              />
+              {/* Voice (5-lines) is ALWAYS available — tap to dictate; speech
+                  appends to whatever's already in the field. The send arrow
+                  appears beside it once there's text to send. */}
               <TouchableOpacity
                 style={styles.inputSideButton}
                 onPress={startListening}
@@ -1067,77 +1190,6 @@ export function EsterChatScreen() {
                 />
                 <VoiceWaveIcon color="#FAFDFE" />
               </TouchableOpacity>
-            </View>
-          )}
-
-          {inputMode === "voice" && isListening && (
-            <View
-              style={[
-                styles.listeningPill,
-                { backgroundColor: colors.listeningPillBg },
-              ]}
-            >
-              <View style={styles.listeningTopRow}>
-                <View style={styles.listeningWaveformWrap}>
-                  <ListeningWaveform color={colors.listeningPillText} active />
-                </View>
-                <Text style={[styles.listeningDuration, { color: colors.listeningPillText }]}>
-                  {formatDuration(recordSeconds)}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.sendCircle, { backgroundColor: colors.sendCircleBg }]}
-                  onPress={submitVoiceTranscript}
-                  activeOpacity={0.85}
-                >
-                  <SendArrowIcon color={colors.sendArrowColor} />
-                </TouchableOpacity>
-              </View>
-              <Text
-                style={[
-                  styles.listeningTranscript,
-                  {
-                    color: transcript
-                      ? colors.listeningPillText
-                      : colors.listeningTranscriptMuted,
-                  },
-                ]}
-              >
-                {transcript || "Listening…"}
-              </Text>
-            </View>
-          )}
-
-          {inputMode === "keyboard" && (
-            <View style={[styles.inputPill, styles.inputPillVoice]}>
-              <LiquidGlass
-                style={StyleSheet.absoluteFill}
-                intensity={30}
-                tint="light"
-                overlay="rgba(255,255,255,0.1)"
-                overlayAndroid="rgba(40,20,22,0.45)"
-                shine
-              />
-              <TextInput
-                style={[styles.input, { color: K.bone }]}
-                value={inputText}
-                onChangeText={(t) => {
-                  // Enter inserts a newline on a multiline input; treat it as
-                  // "send" and never store it, so the field doesn't briefly grow
-                  // to two lines (placeholder jumping up) before clearing.
-                  if (t.includes("\n")) {
-                    handleKeyboardSend();
-                  } else {
-                    setInputText(t);
-                  }
-                }}
-                placeholder="Type anything…"
-                placeholderTextColor="rgba(243,239,227,0.55)"
-                multiline
-                maxLength={500}
-                blurOnSubmit={false}
-                returnKeyType="send"
-                autoFocus
-              />
               {inputText.trim() ? (
                 <TouchableOpacity
                   style={styles.inputSideButton}
@@ -1145,41 +1197,21 @@ export function EsterChatScreen() {
                   activeOpacity={0.85}
                   accessibilityLabel="Send"
                 >
+                  {/* Transparent dark glass to match the Read action button, so
+                      send reads as secondary next to the bright frosted voice
+                      button. Arrow is #FF0099 (like Read's glyph) to stay
+                      visible on the dark disc. */}
                   <LiquidGlass
                     style={StyleSheet.absoluteFill}
                     intensity={24}
-                    tint="light"
-                    overlay="rgba(0,0,0,0)"
-                    overlayAndroid="rgba(0,0,0,0)"
-                    fills={["rgba(255,255,255,0.88)", "rgba(153,153,153,0.18)"]}
+                    tint="dark"
+                    overlay="rgba(28,12,14,0.18)"
+                    overlayAndroid="rgba(28,12,14,0.35)"
                     shine
                   />
-                  <SendArrowIcon color="#361416" />
+                  <SendArrowIcon color="#FF0099" size={20} />
                 </TouchableOpacity>
-              ) : (
-                // Empty input → show the same voice disc as the voice bubble;
-                // tapping it switches to voice and starts listening.
-                <TouchableOpacity
-                  style={styles.inputSideButton}
-                  onPress={() => {
-                    setInputMode("voice");
-                    startListening();
-                  }}
-                  activeOpacity={0.85}
-                  accessibilityLabel="Speak to Ester"
-                >
-                  <LiquidGlass
-                    style={StyleSheet.absoluteFill}
-                    intensity={24}
-                    tint="light"
-                    overlay="rgba(0,0,0,0)"
-                    overlayAndroid="rgba(0,0,0,0)"
-                    fills={["rgba(255,255,255,0.88)", "rgba(153,153,153,0.18)"]}
-                    shine
-                  />
-                  <VoiceWaveIcon color="#FAFDFE" />
-                </TouchableOpacity>
-              )}
+              ) : null}
             </View>
           )}
         </View>
@@ -1631,12 +1663,16 @@ function MicIcon({ color }: { color: string }) {
   );
 }
 
-function SendArrowIcon({ color }: { color: string }) {
+function SendArrowIcon({ color, size = 15 }: { color: string; size?: number }) {
   return (
-    <Svg width={15} height={15} viewBox="0 0 15 15" fill="none">
+    <Svg width={size} height={size} viewBox="0 0 15 15" fill="none">
       <Path
         d="M6.44825 2.496L1.279 7.66525C1.13033 7.81392 0.956333 7.88733 0.757 7.8855C0.557666 7.8835 0.380416 7.805 0.22525 7.65C0.0804164 7.49483 0.00541641 7.31917 0.00024974 7.123C-0.00491693 6.92683 0.0700831 6.75117 0.22525 6.596L6.5655 0.25575C6.65917 0.162083 6.75792 0.0960833 6.86175 0.0577499C6.96558 0.0192499 7.07775 0 7.19825 0C7.31875 0 7.43092 0.0192499 7.53475 0.0577499C7.63858 0.0960833 7.73733 0.162083 7.831 0.25575L14.1712 6.596C14.3097 6.7345 14.3806 6.906 14.3837 7.1105C14.3869 7.315 14.3161 7.49483 14.1712 7.65C14.0161 7.805 13.8379 7.8825 13.6367 7.8825C13.4354 7.8825 13.2572 7.805 13.102 7.65L7.94825 2.496V13.873C7.94825 14.0858 7.87642 14.264 7.73275 14.4075C7.58925 14.5512 7.41108 14.623 7.19825 14.623C6.98542 14.623 6.80725 14.5512 6.66375 14.4075C6.52008 14.264 6.44825 14.0858 6.44825 13.873V2.496Z"
         fill={color}
+        stroke={color}
+        strokeWidth={0.7}
+        strokeLinejoin="round"
+        strokeLinecap="round"
       />
     </Svg>
   );
@@ -1693,14 +1729,14 @@ function VoiceActionButton({
                 ? "rgba(0,0,0,0)"
                 : active
                 ? "rgba(243,239,227,0.22)"
-                : "rgba(28,12,14,0.3)"
+                : "rgba(28,12,14,0.18)"
             }
             overlayAndroid={
               fills
                 ? "rgba(0,0,0,0)"
                 : active
                 ? "rgba(243,239,227,0.3)"
-                : "rgba(28,12,14,0.5)"
+                : "rgba(28,12,14,0.35)"
             }
             fills={fills}
             shine={shine}
@@ -1733,6 +1769,25 @@ function VoiceWaveIcon({ color = "#FAFDFE" }: { color?: string }) {
         d="M4.52083 16.6924V5.47429C4.52083 5.22637 4.60474 5.01861 4.77254 4.851C4.94035 4.68319 5.14821 4.59929 5.39613 4.59929C5.64424 4.59929 5.852 4.68319 6.01942 4.851C6.18703 5.01861 6.27083 5.22637 6.27083 5.47429V16.6924C6.27083 16.9403 6.18693 17.1481 6.01912 17.3157C5.85132 17.4835 5.64346 17.5674 5.39554 17.5674C5.14743 17.5674 4.93967 17.4835 4.77225 17.3157C4.60464 17.1481 4.52083 16.9403 4.52083 16.6924ZM9.04167 21.2917V0.875C9.04167 0.627083 9.12557 0.41932 9.29338 0.251708C9.46118 0.0839029 9.66904 0 9.91696 0C10.1651 0 10.3728 0.0839029 10.5402 0.251708C10.7079 0.41932 10.7917 0.627083 10.7917 0.875V21.2917C10.7917 21.5396 10.7078 21.7473 10.54 21.915C10.3722 22.0828 10.1643 22.1667 9.91638 22.1667C9.66826 22.1667 9.4605 22.0828 9.29308 21.915C9.12547 21.7473 9.04167 21.5396 9.04167 21.2917ZM0 12.1377V10.029C0 9.78104 0.0839029 9.57318 0.251708 9.40537C0.419514 9.23776 0.627375 9.15396 0.875292 9.15396C1.1234 9.15396 1.33117 9.23776 1.49858 9.40537C1.66619 9.57318 1.75 9.78104 1.75 10.029V12.1377C1.75 12.3856 1.6661 12.5935 1.49829 12.7613C1.33049 12.9289 1.12263 13.0127 0.874708 13.0127C0.626597 13.0127 0.418833 12.9289 0.251417 12.7613C0.0838054 12.5935 0 12.3856 0 12.1377ZM13.5625 16.6924V5.47429C13.5625 5.22637 13.6464 5.01861 13.8142 4.851C13.982 4.68319 14.1899 4.59929 14.4378 4.59929C14.6859 4.59929 14.8937 4.68319 15.0611 4.851C15.2287 5.01861 15.3125 5.22637 15.3125 5.47429V16.6924C15.3125 16.9403 15.2286 17.1481 15.0608 17.3157C14.893 17.4835 14.6851 17.5674 14.4372 17.5674C14.1891 17.5674 13.9813 17.4835 13.8139 17.3157C13.6463 17.1481 13.5625 16.9403 13.5625 16.6924ZM18.0833 12.1377V10.029C18.0833 9.78104 18.1672 9.57318 18.335 9.40537C18.5028 9.23776 18.7107 9.15396 18.9586 9.15396C19.2067 9.15396 19.4145 9.23776 19.5819 9.40537C19.7495 9.57318 19.8333 9.78104 19.8333 10.029V12.1377C19.8333 12.3856 19.7494 12.5935 19.5816 12.7613C19.4138 12.9289 19.206 13.0127 18.958 13.0127C18.7099 13.0127 18.5022 12.9289 18.3347 12.7613C18.1671 12.5935 18.0833 12.3856 18.0833 12.1377Z"
         fill={color}
       />
+    </Svg>
+  );
+}
+
+// Stop-recording glyph shown on the voice button while listening: a thin dark
+// ring with a solid red square at its center (the Figma "stop" indicator).
+function StopRecordingIcon({
+  size = 30,
+  ringColor = "#361416",
+  squareColor = "#DF3E29",
+}: {
+  size?: number;
+  ringColor?: string;
+  squareColor?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 39 39" fill="none">
+      <Circle cx={19.5} cy={19.5} r={18.5} stroke={ringColor} strokeWidth={1} />
+      <Rect x={11.5} y={11.5} width={16} height={16} fill={squareColor} />
     </Svg>
   );
 }
@@ -1817,7 +1872,7 @@ const styles = StyleSheet.create({
   actionCircleEnd: {
     // Figma: #FF1919 @88% with "Plus darker" blend over the maroon gradient.
     // RN can't do plus-darker, so this approximates the composited deep red.
-    backgroundColor: "#D11518",
+    backgroundColor: "#B21214",
   },
   actionLabel: {
     fontFamily: fonts.catalogue,
@@ -2121,8 +2176,24 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    lineHeight: 22,
+    // No lineHeight here: on a multiline iOS TextInput a custom lineHeight
+    // changes the paragraph/typing attributes between the empty and has-text
+    // states, which shifts the caret vertically on clear (the jump on send).
     padding: 0,
+  },
+  // Custom placeholder, vertically centered against the pill so it can't track
+  // the multiline field's transient height (the source of the jump on send).
+  inputPlaceholder: {
+    position: "absolute",
+    left: 24,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+  },
+  inputPlaceholderText: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: "rgba(243,239,227,0.55)",
   },
   sendCircleInline: {
     width: 40,

@@ -22,7 +22,7 @@ const TYPE_PRIMARY: Record<MetabolicType, string> = {
   Rebounder: "#5D5470",
   Ember: "#4F5760",
   Chameleon: "#6B5A4A",
-  Explorer: "#8A7060",
+  Explorer: "#A68A3F",
 };
 
 /**
@@ -52,16 +52,24 @@ export function EsterBackground({ type }: { type: MetabolicType }) {
         <Svg width={size.w} height={size.h}>
           <Defs>
             {/* Type-primary ellipse — peaks just below the timer (~0.11h) at the
-                center and curves down toward the sides; fades to reveal cream. */}
+                center and curves down toward the sides; fades to reveal cream.
+
+                Elliptical radial gradients are expressed as a circle of radius =
+                the VERTICAL radius (ry) plus a `gradientTransform` that scales x
+                to the horizontal radius (rx), rather than svg `rx`/`ry` attrs:
+                react-native-svg's Android renderer mishandles rx/ry and collapses
+                the gradient toward the bottom. This form renders identically on
+                both platforms. scaleX is taken about the center cx so the dome
+                stays centered. */}
             <RadialGradient
               id="esterType"
               gradientUnits="userSpaceOnUse"
               cx={size.w / 2}
               cy={size.h}
-              rx={size.w * 1.2}
-              ry={size.h * 1.0}
-              fx={size.w / 2}
-              fy={size.h}
+              r={size.h * 1.0}
+              gradientTransform={`translate(${size.w / 2}, 0) scale(${
+                (size.w * 1.2) / (size.h * 1.0)
+              }, 1) translate(${-size.w / 2}, 0)`}
             >
               <Stop offset="0" stopColor={primary} stopOpacity={1} />
               <Stop offset="0.72" stopColor={primary} stopOpacity={1} />
@@ -69,16 +77,17 @@ export function EsterBackground({ type }: { type: MetabolicType }) {
               <Stop offset="0.92" stopColor={primary} stopOpacity={0.29} />
               <Stop offset="1" stopColor={primary} stopOpacity={0} />
             </RadialGradient>
-            {/* Dark maroon ellipse over the lower portion. */}
+            {/* Dark maroon ellipse over the lower portion (same rx/ry→r+transform
+                technique as above). */}
             <RadialGradient
               id="esterEllipse"
               gradientUnits="userSpaceOnUse"
               cx={size.w / 2}
               cy={size.h}
-              rx={size.w * 1.3}
-              ry={size.h * 0.72}
-              fx={size.w / 2}
-              fy={size.h}
+              r={size.h * 0.72}
+              gradientTransform={`translate(${size.w / 2}, 0) scale(${
+                (size.w * 1.3) / (size.h * 0.72)
+              }, 1) translate(${-size.w / 2}, 0)`}
             >
               <Stop offset="0" stopColor={BOTTOM_ELLIPSE} stopOpacity={1} />
               <Stop offset="0.6" stopColor={BOTTOM_ELLIPSE} stopOpacity={1} />

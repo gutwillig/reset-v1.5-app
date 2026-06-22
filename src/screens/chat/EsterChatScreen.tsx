@@ -928,6 +928,10 @@ export function EsterChatScreen() {
             playing={isSpeaking}
             style={styles.voiceLogo}
           />
+          {/* Action column. When the transcript sheet is open it sits behind the
+              sheet, so we hide it here and re-float End + Speaker above the sheet
+              (see actionsColOverlay below). */}
+          {!transcriptOpen && (
           <View style={styles.actionsCol}>
             <VoiceActionButton label="End" variant="end" shine onPress={handleClose}>
               <PhoneEndIcon color="#FF0099" />
@@ -953,6 +957,7 @@ export function EsterChatScreen() {
               <ReadLinesIcon color="#FF0099" />
             </VoiceActionButton>
           </View>
+          )}
           {currentEster && !transcriptOpen && !awaitingReply ? (
             <TouchableOpacity
               style={styles.currentMsgWrap}
@@ -1071,6 +1076,28 @@ export function EsterChatScreen() {
           </ScrollView>
         )}
         </View>
+        )}
+
+        {/* With the transcript sheet up (70% tall), the action column would be
+            buried behind it — so float End + Speaker just above the sheet's top
+            edge, still right-aligned. Anchored to bottom:"70%" so it tracks the
+            sheet height on every device. Read is dropped (the sheet's open). */}
+        {transcriptOpen && (
+          <View style={styles.actionsColOverlay}>
+            <VoiceActionButton label="End" variant="end" shine onPress={handleClose}>
+              <PhoneEndIcon color="#FF0099" />
+            </VoiceActionButton>
+            <VoiceActionButton
+              label="Speaker"
+              shine
+              active={ttsEnabled}
+              busy={isPreparingVoice}
+              onPress={toggleTts}
+              fills={["rgba(255,255,255,0.88)", "rgba(153,153,153,0.18)"]}
+            >
+              <MuteIcon color="#361416" muted={!ttsEnabled} />
+            </VoiceActionButton>
+          </View>
         )}
 
         {/* Bottom input area — voice CTA | listening pill | keyboard input */}
@@ -1857,9 +1884,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 18,
   },
+  // Floated above the transcript sheet (height 70%) so End + Speaker stay
+  // reachable while the modal is up. bottom:"70%" aligns to the sheet's top edge;
+  // the translateY lifts it a touch so it rests just above, not flush.
+  actionsColOverlay: {
+    position: "absolute",
+    right: 16,
+    bottom: "70%",
+    transform: [{ translateY: -6 }],
+    alignItems: "center",
+    gap: 10,
+    zIndex: 30,
+  },
   actionItem: {
     alignItems: "center",
-    gap: 6,
+    gap: 3,
   },
   actionCircle: {
     width: 56,

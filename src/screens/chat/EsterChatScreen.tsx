@@ -804,24 +804,11 @@ export function EsterChatScreen() {
   const formatTime = (date: Date) =>
     date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-  const formatDuration = (s: number) => {
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}:${r.toString().padStart(2, "0")}`;
-  };
-
   // ---- RES-140 voice-screen state -------------------------------------------
   // Ester is "speaking" whenever a message is being read aloud — drives the
   // logo animation loop and the read-along text in the call view.
   const isSpeaking = speakingMessageId !== null;
   const [transcriptOpen, setTranscriptOpen] = useState(false);
-
-  // Call-style elapsed timer shown in the top pill.
-  const [callSeconds, setCallSeconds] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setCallSeconds((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   // The most recent Ester message — surfaced as read-along text in the call
   // view. While it's actively being read, only the revealed prefix shows.
@@ -902,7 +889,7 @@ export function EsterChatScreen() {
           },
         ]}
       >
-        {/* Top: leave · call timer · new chat */}
+        {/* Top: leave · new chat */}
         <View style={[styles.voiceTopBar, { paddingTop: insets.top + 6 }]}>
           <TouchableOpacity
             onPress={handleClose}
@@ -910,9 +897,6 @@ export function EsterChatScreen() {
           >
             <CloseIcon color="#361416" />
           </TouchableOpacity>
-          <View style={styles.timerPill}>
-            <Text style={styles.timerText}>{formatDuration(callSeconds)}</Text>
-          </View>
           <TouchableOpacity
             onPress={handleNewChat}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -929,13 +913,10 @@ export function EsterChatScreen() {
             style={styles.voiceLogo}
           />
           {/* Action column. When the transcript sheet is open it sits behind the
-              sheet, so we hide it here and re-float End + Speaker above the sheet
+              sheet, so we hide it here and re-float Speaker above the sheet
               (see actionsColOverlay below). */}
           {!transcriptOpen && (
           <View style={styles.actionsCol}>
-            <VoiceActionButton label="End" variant="end" shine onPress={handleClose}>
-              <PhoneEndIcon color="#FF0099" />
-            </VoiceActionButton>
             <VoiceActionButton
               label="Speaker"
               shine
@@ -1079,14 +1060,11 @@ export function EsterChatScreen() {
         )}
 
         {/* With the transcript sheet up (70% tall), the action column would be
-            buried behind it — so float End + Speaker just above the sheet's top
-            edge, still right-aligned. Anchored to bottom:"70%" so it tracks the
-            sheet height on every device. Read is dropped (the sheet's open). */}
+            buried behind it — so float Speaker just above the sheet's top edge,
+            still right-aligned. Anchored to bottom:"70%" so it tracks the sheet
+            height on every device. Read is dropped (the sheet's open). */}
         {transcriptOpen && (
           <View style={styles.actionsColOverlay}>
-            <VoiceActionButton label="End" variant="end" shine onPress={handleClose}>
-              <PhoneEndIcon color="#FF0099" />
-            </VoiceActionButton>
             <VoiceActionButton
               label="Speaker"
               shine
@@ -1782,17 +1760,6 @@ function VoiceActionButton({
 }
 
 // "call_end" handset — used for the End action.
-function PhoneEndIcon({ color }: { color: string }) {
-  return (
-    <Svg width={27} height={11} viewBox="0 0 27 11" fill="none">
-      <Path
-        d="M3.03333 9.8L0.35 7.175C0.116667 6.94167 0 6.66944 0 6.35833C0 6.04722 0.116667 5.775 0.35 5.54167C2.06111 3.69444 4.03472 2.30903 6.27083 1.38542C8.50694 0.461806 10.7722 0 13.0667 0C15.3611 0 17.6215 0.461806 19.8479 1.38542C22.0743 2.30903 24.0528 3.69444 25.7833 5.54167C26.0167 5.775 26.1333 6.04722 26.1333 6.35833C26.1333 6.66944 26.0167 6.94167 25.7833 7.175L23.1 9.8C22.8861 10.0139 22.6382 10.1306 22.3563 10.15C22.0743 10.1694 21.8167 10.0917 21.5833 9.91667L18.2 7.35C18.0444 7.23333 17.9278 7.09722 17.85 6.94167C17.7722 6.78611 17.7333 6.61111 17.7333 6.41667V3.09167C16.9944 2.85833 16.2361 2.67361 15.4583 2.5375C14.6806 2.40139 13.8833 2.33333 13.0667 2.33333C12.25 2.33333 11.4528 2.40139 10.675 2.5375C9.89722 2.67361 9.13889 2.85833 8.4 3.09167V6.41667C8.4 6.61111 8.36111 6.78611 8.28333 6.94167C8.20556 7.09722 8.08889 7.23333 7.93333 7.35L4.55 9.91667C4.31667 10.0917 4.05903 10.1694 3.77708 10.15C3.49514 10.1306 3.24722 10.0139 3.03333 9.8ZM6.06667 4.025C5.50278 4.31667 4.95833 4.65208 4.43333 5.03125C3.90833 5.41042 3.36389 5.83333 2.8 6.3L3.96667 7.46667L6.06667 5.83333V4.025ZM20.0667 4.08333V5.83333L22.1667 7.46667L23.3333 6.35833C22.7694 5.85278 22.225 5.41528 21.7 5.04583C21.175 4.67639 20.6306 4.35556 20.0667 4.08333Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
 // Graphic-eq / voice waveform glyph for the input bar's voice button.
 function VoiceWaveIcon({ color = "#FAFDFE" }: { color?: string }) {
   return (
@@ -1859,19 +1826,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
     zIndex: 10,
-  },
-  timerPill: {
-    backgroundColor: "#361416",
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  timerText: {
-    fontFamily: fonts.quadrant,
-    fontSize: 16,
-    color: "#FAFDFE",
-    textAlign: "center",
-    letterSpacing: -0.16,
   },
   voiceBody: {
     flex: 1,

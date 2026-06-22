@@ -1310,24 +1310,29 @@ function MessageRow({ message, palette, showTimestamp, formatTime, displayText }
     );
   }
   // Other Ester messages: render markdown (Ester returns ** bold, lists, etc.)
+  // These render directly on the transcript sheet, which is always the dark
+  // maroon surface (#361416) regardless of time of day — so the text must always
+  // be the light bone tone. Using palette.textPrimary here made daytime text
+  // brown-on-brown (#361416 on #361416) = invisible.
+  const sheetText = K.bone;
   const mdStyles = {
     body: {
-      color: palette.textPrimary,
+      color: sheetText,
       fontSize: 16,
       lineHeight: 24,
     },
     paragraph: {
       marginTop: 0,
       marginBottom: 8,
-      color: palette.textPrimary,
+      color: sheetText,
     },
     strong: {
       fontWeight: "600" as const,
-      color: palette.textPrimary,
+      color: sheetText,
     },
     em: {
       fontStyle: "italic" as const,
-      color: palette.textPrimary,
+      color: sheetText,
     },
     bullet_list: {
       marginTop: 4,
@@ -1339,42 +1344,42 @@ function MessageRow({ message, palette, showTimestamp, formatTime, displayText }
     },
     list_item: {
       marginBottom: 4,
-      color: palette.textPrimary,
+      color: sheetText,
     },
     bullet_list_icon: {
-      color: palette.textPrimary,
+      color: sheetText,
     },
     ordered_list_icon: {
-      color: palette.textPrimary,
+      color: sheetText,
     },
     heading1: {
-      color: palette.textPrimary,
+      color: sheetText,
       fontSize: 20,
       fontWeight: "600" as const,
       marginTop: 8,
       marginBottom: 4,
     },
     heading2: {
-      color: palette.textPrimary,
+      color: sheetText,
       fontSize: 18,
       fontWeight: "600" as const,
       marginTop: 8,
       marginBottom: 4,
     },
     heading3: {
-      color: palette.textPrimary,
+      color: sheetText,
       fontSize: 16,
       fontWeight: "600" as const,
       marginTop: 4,
       marginBottom: 4,
     },
     link: {
-      color: palette.textPrimary,
+      color: sheetText,
       textDecorationLine: "underline" as const,
     },
     code_inline: {
-      backgroundColor: "rgba(0,0,0,0.08)",
-      color: palette.textPrimary,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      color: sheetText,
       paddingHorizontal: 4,
       borderRadius: 4,
     },

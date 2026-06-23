@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Circle, Rect } from "react-native-svg";
 import Markdown from "react-native-markdown-display";
 import {
   ExpoSpeechRecognitionModule,
@@ -25,6 +25,10 @@ import {
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { K, toMetabolicType } from "../../constants/colors";
+import { EsterBackground } from "./EsterBackground";
+import { EsterLogoVideo } from "./EsterLogoVideo";
+import { LiquidGlass } from "./LiquidGlass";
+import { ReadAlongText } from "./ReadAlongText";
 import { useApp } from "../../context/AppContext";
 import { fonts, spacing, radius } from "../../constants/typography";
 import { useAppPalette } from "../../hooks/useAppPalette";
@@ -44,6 +48,7 @@ const TTS_ENABLED_KEY = "@reset_ester_tts_enabled";
 
 const ESTER_AVATAR_LIGHT = require("../../../assets/images/ester-avatar.png");
 const ESTER_AVATAR_DARK = require("../../../assets/images/ester-avatar-silver.png");
+// RES-140 — frosted "Glass Effect" disc used as the voice button background.
 
 const TYPE_LOGO = {
   Burner: require("../../../assets/images/type-logos/Burner.png"),
@@ -106,13 +111,29 @@ export function EsterChatScreen() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
+  // The multiline keyboard input grows to fit its text (scrollEnabled={false}),
+  // but iOS reports a stale tall content size for ~1s after the field is cleared
+  // — so on send the pill stays two lines tall with the caret/placeholder pinned
+  // to its top, then collapses (the "jump"). Remounting the field on send via a
+  // changing key sidesteps the lag entirely: the fresh field is one line at once,
+  // and autoFocus keeps it focused so typing continues uninterrupted.
+  const [inputResetKey, setInputResetKey] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
+  // True only during the gap between the user sending and Ester's reply
+  // starting to present — drives the call-view loading dots.
+  const [awaitingReply, setAwaitingReply] = useState(false);
   const [chatSessionId, setChatSessionId] = useState<string | undefined>();
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [inputMode, setInputMode] = useState<InputMode>("voice");
+  // Text/typing is the default mode; the right-side button toggles to voice.
+  const [inputMode, setInputMode] = useState<InputMode>("keyboard");
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
+  // Voice is "dictation": entering voice mode keeps any existing typed draft and
+  // APPENDS the spoken words to it. This holds the draft captured when recording
+  // started so the live bubble can show base + transcript and the stop button can
+  // commit the combined text back into the editable field.
+  const voiceBaseRef = useRef("");
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(0);
   const recordStartRef = useRef<number | null>(null);
@@ -127,8 +148,9 @@ export function EsterChatScreen() {
   // RES-132 — Ester text-to-speech. Off by default; toggled by the header
   // speaker icon and persisted. A ref mirrors the state so the async
   // send-flow reads the latest value (and can bail if toggled off mid-synth).
-  const [ttsEnabled, setTtsEnabled] = useState(false);
-  const ttsEnabledRef = useRef(false);
+  // RES-140 — this is a voice-first screen, so Ester reads aloud by default.
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const ttsEnabledRef = useRef(true);
   const audioPlayerRef = useRef<AudioPlayer | null>(null);
   // While Ester is speaking, reveal her message text in step with playback so
   // the words appear roughly as they're voiced. Only the actively-spoken
@@ -142,9 +164,21 @@ export function EsterChatScreen() {
   const revealedCountRef = useRef(0);
   const revealStateRef = useRef<{ id: string; text: string } | null>(null);
   const takeoverInFlightRef = useRef(false);
+  // Monotonic token for TTS presentations. Every flow that drives the shared
+  // audio player (greeting auto-read, reply playback, mid-stream voice takeover)
+  // claims a fresh value up front and, after each await, bails if a newer
+  // presentation — or stopSpeaking — has superseded it. Without this, a slow TTS
+  // synth (prod network latency) resolving late clobbers the player/reveal of
+  // the message that replaced it, leaving the audio silent and the reveal frozen.
+  const ttsSeqRef = useRef(0);
   // True while the mid-stream takeover is synthesizing — drives the loading
   // affordance so the brief freeze doesn't read as a hang.
   const [isPreparingVoice, setIsPreparingVoice] = useState(false);
+  // RES-140: the message currently being presented as read-along (set the
+  // moment we begin — through TTS synth + playback — and cleared when the
+  // reveal finishes). While it's set, the call view shows the phrase-by-phrase
+  // teleprompter, not the full sentence; the full text appears only after.
+  const [activeReadId, setActiveReadId] = useState<string | null>(null);
 
   const evening = palette.evening;
   const esterAvatar = evening ? ESTER_AVATAR_DARK : ESTER_AVATAR_LIGHT;
@@ -346,6 +380,13 @@ export function EsterChatScreen() {
           timestamp: new Date(),
         });
       }
+      // Pre-mark the opening line as actively reading BEFORE the messages land,
+      // so the call view never renders the full sentence (even for a frame)
+      // before the teleprompter — regardless of whether these state updates get
+      // batched. Only when it'll actually be read aloud.
+      if (ttsEnabledRef.current) {
+        setActiveReadId(greeting[greeting.length - 1].id);
+      }
       setMessages(greeting);
       setIsLoadingHistory(false);
     }
@@ -358,9 +399,21 @@ export function EsterChatScreen() {
   const startListening = async () => {
     // Don't let Ester's voice bleed into the mic while the user is talking.
     stopSpeaking();
+    // Capture the current typed draft so speech APPENDS to it (dictation can add
+    // to a message in progress; empty when starting fresh).
+    voiceBaseRef.current = inputText;
+    // Switch to voice mode and show the listening UI up front so tapping the
+    // voice button goes straight to the recording pill with no flash of an idle
+    // voice bubble during the async permission/start gap. Reverted on failure.
+    setInputMode("voice");
+    setIsListening(true);
     try {
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!result.granted) return;
+      if (!result.granted) {
+        setIsListening(false);
+        setInputMode("keyboard");
+        return;
+      }
 
       // Defensive cleanup so iOS's SFSpeechRecognizer can re-arm cleanly when
       // the user taps Tap-to-speak again after submitting.
@@ -415,6 +468,8 @@ export function EsterChatScreen() {
     }
     recordStartRef.current = null;
     setIsListening(false);
+    // Recording always ends back in text/typing mode (the default).
+    setInputMode("keyboard");
     try {
       ExpoSpeechRecognitionModule.stop();
     } catch {
@@ -424,6 +479,7 @@ export function EsterChatScreen() {
 
   const cancelListening = () => {
     setTranscript("");
+    voiceBaseRef.current = "";
     stopListening();
   };
 
@@ -431,10 +487,11 @@ export function EsterChatScreen() {
   useEffect(() => {
     (async () => {
       try {
+        // RES-140: voice-first — on by default; only honor an explicit mute.
         const saved = await AsyncStorage.getItem(TTS_ENABLED_KEY);
-        if (saved === "1") {
-          setTtsEnabled(true);
-          ttsEnabledRef.current = true;
+        if (saved === "0") {
+          setTtsEnabled(false);
+          ttsEnabledRef.current = false;
         }
       } catch {}
       try {
@@ -466,16 +523,36 @@ export function EsterChatScreen() {
       revealTickRef.current = null;
     }
   };
+  // Tear down any existing audio player and create a fresh one for `uri`. We
+  // never reuse a player via replace(): on a physical device, swapping the
+  // source of a player that was mid/recently-playing (e.g. the greeting
+  // auto-read) stalls it — audio runs ~1s then halts and the reveal freezes.
+  // A fresh player is the known-good path and the simulator behaves identically.
+  const recreateAudioPlayer = (uri: string): AudioPlayer => {
+    if (audioPlayerRef.current) {
+      try {
+        audioPlayerRef.current.remove();
+      } catch {}
+      audioPlayerRef.current = null;
+    }
+    const player = createAudioPlayer({ uri });
+    audioPlayerRef.current = player;
+    return player;
+  };
 
   // Stop playback and reveal the full text immediately (clearing the gated id
   // makes the row render its complete message). Used on mute / leave / mic.
   const stopSpeaking = () => {
+    // Invalidate any in-flight TTS synth so a request that resolves after this
+    // can't start playing back over the silence.
+    ttsSeqRef.current++;
     clearRevealTick();
     revealStateRef.current = null;
     try {
       audioPlayerRef.current?.pause();
     } catch {}
     setSpeaking(null);
+    setActiveReadId(null);
   };
 
   // Reveal `text` in step with the audio player's position. `baseOffset` lets
@@ -494,6 +571,7 @@ export function EsterChatScreen() {
       if (cur >= dur - 0.06) {
         setReveal(text.length);
         setSpeaking(null);
+        setActiveReadId(null);
         revealStateRef.current = null;
         clearRevealTick();
       }
@@ -512,6 +590,7 @@ export function EsterChatScreen() {
       setReveal(count);
       if (count >= text.length) {
         setSpeaking(null);
+        setActiveReadId(null);
         revealStateRef.current = null;
         clearRevealTick();
       }
@@ -522,34 +601,49 @@ export function EsterChatScreen() {
   // first and sync the reveal to playback; with voice off, stream on a timer.
   // Either way it's best-effort — on failure the full text is shown.
   const presentEsterMessage = async (message: Message) => {
+    const seq = ++ttsSeqRef.current;
+    // Mark as actively reading from the start (covers the TTS-synth gap) so the
+    // call view shows the teleprompter, not the full sentence, until it's done.
+    if (message.text.trim()) setActiveReadId(message.id);
     if (ttsEnabledRef.current && message.text.trim()) {
       try {
         const { audioBase64 } = await synthesizeSpeech(message.text);
-        if (ttsEnabledRef.current) {
+        // Only drive playback if we're still the latest presentation and voice
+        // is still on — otherwise a newer message (or mute) has taken over and
+        // touching the player here would clobber it.
+        if (seq === ttsSeqRef.current && ttsEnabledRef.current) {
           const uri = `${FileSystem.cacheDirectory}ester-tts-${Date.now()}.mp3`;
           await FileSystem.writeAsStringAsync(uri, audioBase64, {
             encoding: FileSystem.EncodingType.Base64,
           });
-          if (!audioPlayerRef.current) {
-            audioPlayerRef.current = createAudioPlayer({ uri });
-          } else {
-            audioPlayerRef.current.replace({ uri });
+          if (seq === ttsSeqRef.current) {
+            // Always play on a FRESH player. Reusing the player via replace()
+            // stalls it on a physical device when the prior source was mid- or
+            // recently-playing (the greeting auto-read) — audio runs ~1s then
+            // halts and the playback-synced reveal freezes. The simulator masks
+            // this. Tearing down + recreating matches the known-good
+            // first-message path (createAudioPlayer + play).
+            const player = recreateAudioPlayer(uri);
+            setMessages((prev) => [...prev, message]);
+            setAwaitingReply(false);
+            revealStateRef.current = { id: message.id, text: message.text };
+            setSpeaking(message.id);
+            setReveal(0);
+            player.play();
+            startRevealTick(message.id, message.text);
+            return;
           }
-          setMessages((prev) => [...prev, message]);
-          revealStateRef.current = { id: message.id, text: message.text };
-          setSpeaking(message.id);
-          setReveal(0);
-          audioPlayerRef.current.play();
-          startRevealTick(message.id, message.text);
-          return;
         }
       } catch {
         // fall through to text-only streaming
       }
     }
-    // Voice off (or synthesis failed): stream the text on a timer, no audio.
+    // Voice off, synthesis failed, or superseded mid-synth: always land the
+    // message; only start the timed reveal if we're still the latest (a newer
+    // presentation owns the reveal otherwise).
     setMessages((prev) => [...prev, message]);
-    if (message.text.trim()) {
+    setAwaitingReply(false);
+    if (message.text.trim() && seq === ttsSeqRef.current) {
       revealStateRef.current = { id: message.id, text: message.text };
       setSpeaking(message.id);
       setReveal(0);
@@ -573,6 +667,7 @@ export function EsterChatScreen() {
     const active = revealStateRef.current;
     if (!active || takeoverInFlightRef.current) return;
     const { id, text } = active;
+    const seq = ++ttsSeqRef.current;
     const offset = snapToWordStart(text, revealedCountRef.current);
     const remainder = text.slice(offset).trim();
     clearRevealTick(); // freeze the timed reveal at the current word
@@ -587,18 +682,20 @@ export function EsterChatScreen() {
     setIsPreparingVoice(true);
     try {
       const { audioBase64 } = await synthesizeSpeech(remainder);
-      // Bail if the user muted again or moved on during synthesis.
-      if (!ttsEnabledRef.current || speakingMessageIdRef.current !== id) return;
+      // Bail if the user muted again, moved on, or a newer presentation
+      // superseded us during synthesis.
+      if (
+        seq !== ttsSeqRef.current ||
+        !ttsEnabledRef.current ||
+        speakingMessageIdRef.current !== id
+      )
+        return;
       const uri = `${FileSystem.cacheDirectory}ester-tts-${Date.now()}.mp3`;
       await FileSystem.writeAsStringAsync(uri, audioBase64, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      if (!audioPlayerRef.current) {
-        audioPlayerRef.current = createAudioPlayer({ uri });
-      } else {
-        audioPlayerRef.current.replace({ uri });
-      }
-      audioPlayerRef.current.play();
+      const player = recreateAudioPlayer(uri);
+      player.play();
       startRevealTick(id, text, offset);
     } catch {
       // Synthesis failed — just finish revealing the text silently.
@@ -626,16 +723,32 @@ export function EsterChatScreen() {
     } catch {}
   };
 
-  const submitVoiceTranscript = async () => {
-    const finalText = transcript.trim();
+  // The live voice draft = the typed text we started from + the spoken words.
+  const composeVoiceDraft = () => {
+    const base = voiceBaseRef.current.trim();
+    const spoken = transcript.trim();
+    if (base && spoken) return `${base} ${spoken}`;
+    return base || spoken;
+  };
+
+  // Stop button (Option B — review, don't auto-send): end recognition and drop
+  // the recognized text into the editable field back in text mode. The user
+  // reviews/edits, then taps the send arrow (or Return) to send. Re-entering
+  // voice from here appends again.
+  const commitVoiceDraft = () => {
+    const draft = composeVoiceDraft();
     stopListening();
-    if (!finalText) return;
-    await sendText(finalText);
+    setInputText(draft);
     setTranscript("");
+    voiceBaseRef.current = "";
   };
 
   const sendText = async (text: string) => {
     if (!text.trim() || isTyping) return;
+
+    // A new user turn cancels any in-flight / still-playing Ester audio (e.g. the
+    // greeting auto-read) so it can't clobber this reply's playback and reveal.
+    stopSpeaking();
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -646,7 +759,10 @@ export function EsterChatScreen() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
+    // Remount the input so it collapses to one line at once (no stale-height jump).
+    setInputResetKey((k) => k + 1);
     setIsTyping(true);
+    setAwaitingReply(true);
 
     try {
       const isNewMealChat = meal && !chatSessionId;
@@ -677,6 +793,9 @@ export function EsterChatScreen() {
         toolCalls: response.toolCalls as ToolCall[] | undefined,
       };
       // Stream the reply in — synced to voice when on, on a timer when off.
+      // presentEsterMessage clears the loading dots the moment the reply lands
+      // (after the TTS-synth gap), so the dots stay up until the teleprompter
+      // takes over — no full-sentence flash of the prior message in between.
       await presentEsterMessage(esterMessage);
     } catch {
       const errorMessage: Message = {
@@ -688,6 +807,7 @@ export function EsterChatScreen() {
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
+      setAwaitingReply(false);
     }
   };
 
@@ -697,11 +817,6 @@ export function EsterChatScreen() {
 
   const handlePromptTap = (prompt: string) => {
     sendText(prompt);
-  };
-
-  const toggleInputMode = () => {
-    if (isListening) cancelListening();
-    setInputMode((m) => (m === "voice" ? "keyboard" : "voice"));
   };
 
   const handleClose = () => {
@@ -714,22 +829,96 @@ export function EsterChatScreen() {
     if (isListening) cancelListening();
     stopSpeaking();
     setChatSessionId(undefined);
+    // Re-arm the one-shot greeting auto-read for the new conversation.
+    greetingReadRef.current = false;
+    // Pre-mark the greeting as actively reading BEFORE it lands (stopSpeaking
+    // just cleared it) so the teleprompter shows from the first frame instead
+    // of flashing the full sentence. Only when it'll be read aloud.
+    if (ttsEnabledRef.current) {
+      setReveal(0);
+      setActiveReadId(defaultGreeting.id);
+    }
     setMessages([defaultGreeting]);
     setInputText("");
+    setInputResetKey((k) => k + 1);
     await AsyncStorage.setItem(PENDING_NEW_CHAT_KEY, "true");
   };
 
   const formatTime = (date: Date) =>
     date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-  const formatDuration = (s: number) => {
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}:${r.toString().padStart(2, "0")}`;
+  // ---- RES-140 voice-screen state -------------------------------------------
+  // Ester is "speaking" whenever a message is being read aloud — drives the
+  // logo animation loop and the read-along text in the call view.
+  const isSpeaking = speakingMessageId !== null;
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+
+  // The most recent Ester message — surfaced as read-along text in the call
+  // view. While it's actively being read, only the revealed prefix shows.
+  const currentEster = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender === "ester") return messages[i];
+    }
+    return undefined;
+  }, [messages]);
+  const currentEsterText =
+    currentEster && speakingMessageId === currentEster.id
+      ? currentEster.text.slice(0, revealedCount)
+      : currentEster?.text;
+
+  // "Read" action — re-read the current Ester message aloud without re-adding it.
+  const replayCurrentMessage = async () => {
+    const msg = currentEster;
+    if (!msg?.text.trim()) return;
+    const seq = ++ttsSeqRef.current;
+    setActiveReadId(msg.id);
+    if (!ttsEnabledRef.current) {
+      setTtsEnabled(true);
+      ttsEnabledRef.current = true;
+      try {
+        await AsyncStorage.setItem(TTS_ENABLED_KEY, "1");
+      } catch {}
+    }
+    try {
+      const { audioBase64 } = await synthesizeSpeech(msg.text);
+      // Bail if a newer presentation (e.g. the user sent a question) superseded
+      // this read during synth — otherwise this late read clobbers the reply's
+      // playback and freezes its reveal.
+      if (seq !== ttsSeqRef.current) return;
+      const uri = `${FileSystem.cacheDirectory}ester-tts-${Date.now()}.mp3`;
+      await FileSystem.writeAsStringAsync(uri, audioBase64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      if (seq !== ttsSeqRef.current) return;
+      const player = recreateAudioPlayer(uri);
+      revealStateRef.current = { id: msg.id, text: msg.text };
+      setSpeaking(msg.id);
+      setReveal(0);
+      player.play();
+      startRevealTick(msg.id, msg.text);
+    } catch {}
   };
 
+  // RES-140: on a fresh conversation, auto-read Ester's opening line (piece-meal
+  // via the read-along). Fires once, only when there are no user turns yet and
+  // TTS isn't muted — reopening an existing chat won't re-read old messages.
+  const greetingReadRef = useRef(false);
+  useEffect(() => {
+    if (isLoadingHistory || greetingReadRef.current) return;
+    if (!ttsEnabledRef.current) return;
+    if (messages.some((m) => m.sender === "user")) {
+      greetingReadRef.current = true;
+      return;
+    }
+    if (currentEster) {
+      greetingReadRef.current = true;
+      replayCurrentMessage();
+    }
+  }, [isLoadingHistory, currentEster, messages]);
+
   return (
-    <View style={[styles.outerContainer, { backgroundColor: colors.screenBg }]}>
+    <View style={styles.outerContainer}>
+      <EsterBackground type={metabolicType} />
       <View
         style={[
           styles.container,
@@ -742,61 +931,85 @@ export function EsterChatScreen() {
               keyboardHeight > 0
                 ? keyboardHeight + (Platform.OS === "android" ? 12 : 0)
                 : insets.bottom,
-            backgroundColor: colors.screenBg,
           },
         ]}
       >
-        {/* Header: close + new chat | avatar | mute (decorative) */}
-        <View
-          style={[
-            styles.headerOverlay,
-            {
-              paddingTop: insets.top,
-              backgroundColor: colors.headerOverlayBg,
-            },
-          ]}
-          onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
-        >
-          <View style={styles.header}>
-          <View style={styles.headerLeftGroup}>
-            <TouchableOpacity
-              style={styles.headerIconButton}
-              onPress={handleClose}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <CloseIcon color={colors.headerIcon} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.headerIconButton}
-              onPress={handleNewChat}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <PlusIcon color={colors.headerIcon} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.headerCenter}>
-            <Image source={headerLogo} style={styles.headerAvatar} resizeMode="contain" />
-          </View>
-          <View style={styles.headerRightGroup}>
-            <TouchableOpacity
-              style={styles.headerIconButton}
-              onPress={toggleTts}
-              disabled={isPreparingVoice}
-              accessibilityLabel={ttsEnabled ? "Mute Ester's voice" : "Enable Ester's voice"}
-              accessibilityState={{ selected: ttsEnabled, busy: isPreparingVoice }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              {isPreparingVoice ? (
-                <ActivityIndicator size="small" color={colors.headerIcon} />
-              ) : (
-                <MuteIcon color={colors.headerIcon} muted={!ttsEnabled} />
-              )}
-            </TouchableOpacity>
-          </View>
-          </View>
+        {/* Top: leave · new chat */}
+        <View style={[styles.voiceTopBar, { paddingTop: insets.top + 6 }]}>
+          <TouchableOpacity
+            onPress={handleClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <CloseIcon color="#361416" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleNewChat}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <PlusIcon color="#361416" />
+          </TouchableOpacity>
         </View>
 
-        {/* Messages */}
+        {/* Call body: type logo animation + action column + read-along text */}
+        <View style={styles.voiceBody}>
+          <EsterLogoVideo
+            type={metabolicType}
+            playing={isSpeaking}
+            style={styles.voiceLogo}
+          />
+          {/* Action column. When the transcript sheet is open it sits behind the
+              sheet, so we hide it here and re-float Speaker above the sheet
+              (see actionsColOverlay below). */}
+          {!transcriptOpen && (
+          <View style={styles.actionsCol}>
+            <VoiceActionButton
+              label="Speaker"
+              shine
+              active={ttsEnabled}
+              busy={isPreparingVoice}
+              onPress={toggleTts}
+              // Figma "Liquid Glass" fill stack: #FFFFFF @72% base, then a
+              // #999999 Overlay tint — flattened to plain alpha fills since RN
+              // can't do Figma blend modes.
+              fills={["rgba(255,255,255,0.88)", "rgba(153,153,153,0.18)"]}
+            >
+              <MuteIcon color="#361416" muted={!ttsEnabled} />
+            </VoiceActionButton>
+            <VoiceActionButton
+              label="Read"
+              shine
+              onPress={() => setTranscriptOpen((v) => !v)}
+            >
+              <ReadLinesIcon color="#FF0099" />
+            </VoiceActionButton>
+          </View>
+          )}
+          {currentEster && !transcriptOpen && !awaitingReply ? (
+            <TouchableOpacity
+              style={styles.currentMsgWrap}
+              activeOpacity={0.9}
+              onPress={() => setTranscriptOpen(true)}
+            >
+              <ReadAlongText
+                text={currentEster.text}
+                revealedCount={revealedCount}
+                active={activeReadId === currentEster.id}
+              />
+            </TouchableOpacity>
+          ) : null}
+          {awaitingReply && !transcriptOpen ? <CallLoadingDots /> : null}
+        </View>
+
+        {/* Transcript pull-up sheet — the full conversation history */}
+        {transcriptOpen && (
+        <View style={styles.transcriptSheet}>
+          <TouchableOpacity
+            style={styles.sheetHandleHit}
+            onPress={() => setTranscriptOpen(false)}
+            hitSlop={{ top: 12, bottom: 12, left: 40, right: 40 }}
+          >
+            <View style={styles.sheetGrip} />
+          </TouchableOpacity>
         {isLoadingHistory ? (
           <View style={styles.loadingContainer}>
             <Image source={esterAvatar} style={styles.loadingAvatar} resizeMode="contain" />
@@ -807,7 +1020,7 @@ export function EsterChatScreen() {
             style={styles.messagesContainer}
             contentContainerStyle={[
               styles.messagesContent,
-              { paddingTop: headerHeight + 24 },
+              { paddingTop: 12, paddingBottom: 96 + insets.bottom },
             ]}
             onContentSizeChange={() =>
               scrollViewRef.current?.scrollToEnd({ animated: true })
@@ -888,103 +1101,167 @@ export function EsterChatScreen() {
             )}
           </ScrollView>
         )}
+        </View>
+        )}
+
+        {/* With the transcript sheet up (70% tall), the action column would be
+            buried behind it — so float Speaker just above the sheet's top edge,
+            still right-aligned. Anchored to bottom:"70%" so it tracks the sheet
+            height on every device. Read is dropped (the sheet's open). */}
+        {transcriptOpen && (
+          <View style={styles.actionsColOverlay}>
+            <VoiceActionButton
+              label="Speaker"
+              shine
+              active={ttsEnabled}
+              busy={isPreparingVoice}
+              onPress={toggleTts}
+              fills={["rgba(255,255,255,0.88)", "rgba(153,153,153,0.18)"]}
+            >
+              <MuteIcon color="#361416" muted={!ttsEnabled} />
+            </VoiceActionButton>
+          </View>
+        )}
 
         {/* Bottom input area — voice CTA | listening pill | keyboard input */}
         <View style={styles.bottomBar}>
-          {inputMode === "voice" && !isListening && (
-            <View style={styles.voiceCtaRow}>
+          {inputMode === "voice" && (
+            <View style={[styles.inputPill, styles.inputPillVoice]}>
+              <LiquidGlass
+                style={StyleSheet.absoluteFill}
+                intensity={30}
+                tint="light"
+                overlay="rgba(255,255,255,0.1)"
+                overlayAndroid="rgba(40,20,22,0.45)"
+                shine
+              />
+              {/* Voice mode reuses the same frosted pill as text mode. The text
+                  area shows the live draft (any text we started from + the
+                  spoken words), or a "Listening…" placeholder until words land;
+                  the right disc is the circle+square stop glyph. When not
+                  listening (rare fallback) the placeholder reads "Type
+                  anything…" and tapping it drops back to text mode. */}
               <TouchableOpacity
-                style={[
-                  styles.modeToggle,
-                  { backgroundColor: colors.ctaToggleBg },
-                ]}
-                onPress={toggleInputMode}
-                activeOpacity={0.8}
+                style={styles.tapToSpeakHit}
+                onPress={isListening ? undefined : () => setInputMode("keyboard")}
+                activeOpacity={isListening ? 1 : 0.7}
+                disabled={isListening}
               >
-                <KeyboardIcon color={colors.ctaToggleIcon} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tapToSpeak, { backgroundColor: colors.ctaBg }]}
-                onPress={startListening}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.tapToSpeakText, { color: colors.ctaText }]}>
-                  Tap to speak
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {inputMode === "voice" && isListening && (
-            <View
-              style={[
-                styles.listeningPill,
-                { backgroundColor: colors.listeningPillBg },
-              ]}
-            >
-              <View style={styles.listeningTopRow}>
-                <View style={styles.listeningWaveformWrap}>
-                  <ListeningWaveform color={colors.listeningPillText} active />
-                </View>
-                <Text style={[styles.listeningDuration, { color: colors.listeningPillText }]}>
-                  {formatDuration(recordSeconds)}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.sendCircle, { backgroundColor: colors.sendCircleBg }]}
-                  onPress={submitVoiceTranscript}
-                  activeOpacity={0.85}
+                <Text
+                  style={[
+                    styles.inputPlaceholderText,
+                    composeVoiceDraft() ? { color: K.bone } : null,
+                  ]}
+                  numberOfLines={3}
                 >
-                  <SendArrowIcon color={colors.sendArrowColor} />
-                </TouchableOpacity>
-              </View>
-              <Text
-                style={[
-                  styles.listeningTranscript,
-                  {
-                    color: transcript
-                      ? colors.listeningPillText
-                      : colors.listeningTranscriptMuted,
-                  },
-                ]}
+                  {composeVoiceDraft() ||
+                    (isListening ? "Listening…" : "Type anything…")}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.inputSideButton}
+                onPress={isListening ? commitVoiceDraft : startListening}
+                activeOpacity={0.85}
+                accessibilityLabel={isListening ? "Stop recording" : "Speak to Ester"}
               >
-                {transcript || "Listening…"}
-              </Text>
+                <LiquidGlass
+                  style={StyleSheet.absoluteFill}
+                  intensity={24}
+                  tint="light"
+                  overlay="rgba(0,0,0,0)"
+                  overlayAndroid="rgba(0,0,0,0)"
+                  fills={["rgba(255,255,255,0.88)", "rgba(153,153,153,0.18)"]}
+                  shine
+                />
+                <StopRecordingIcon size={38} />
+              </TouchableOpacity>
             </View>
           )}
 
           {inputMode === "keyboard" && (
-            <View style={styles.keyboardRow}>
+            <View style={[styles.inputPill, styles.inputPillVoice]}>
+              <LiquidGlass
+                style={StyleSheet.absoluteFill}
+                intensity={30}
+                tint="light"
+                overlay="rgba(255,255,255,0.1)"
+                overlayAndroid="rgba(40,20,22,0.45)"
+                shine
+              />
+              {/* Custom placeholder. A multiline iOS TextInput top-aligns its
+                  native placeholder, and on clear the field's measured height
+                  lags ~1s before collapsing to one line — so the native
+                  placeholder renders high then drops ("jumps") on send. Ours is
+                  centered against the pill, independent of the field height, so
+                  it never moves. */}
+              {!inputText ? (
+                <View style={styles.inputPlaceholder} pointerEvents="none">
+                  <Text style={styles.inputPlaceholderText}>Type anything…</Text>
+                </View>
+              ) : null}
+              <TextInput
+                key={`kbinput-${inputResetKey}`}
+                style={[styles.input, { color: K.bone }]}
+                value={inputText}
+                onChangeText={setInputText}
+                onSubmitEditing={handleKeyboardSend}
+                // Multiline + scrollEnabled={false} grows the field to fit the
+                // text so a long message wraps and stays fully visible. The key
+                // (bumped on send) remounts the field on clear so it collapses to
+                // one line instantly instead of riding iOS's stale tall content
+                // size. submitBehavior="submit" makes Return fire onSubmitEditing
+                // WITHOUT inserting a newline (keeps the keyboard up).
+                multiline
+                scrollEnabled={false}
+                submitBehavior="submit"
+                maxLength={500}
+                returnKeyType="send"
+                // No autoFocus: text mode is the default, so auto-focusing would
+                // pop the keyboard on entry and cover the call visuals. The field
+                // focuses when the user taps it.
+              />
+              {/* Voice (5-lines) is ALWAYS available — tap to dictate; speech
+                  appends to whatever's already in the field. The send arrow
+                  appears beside it once there's text to send. */}
               <TouchableOpacity
-                style={[
-                  styles.modeToggle,
-                  { backgroundColor: colors.ctaToggleBg },
-                ]}
-                onPress={toggleInputMode}
-                activeOpacity={0.8}
+                style={styles.inputSideButton}
+                onPress={startListening}
+                activeOpacity={0.85}
+                accessibilityLabel="Speak to Ester"
               >
-                <MicIcon color={colors.ctaToggleIcon} />
-              </TouchableOpacity>
-              <View style={[styles.inputPill, { backgroundColor: colors.inputBg }]}>
-                <TextInput
-                  style={[styles.input, { color: colors.inputText }]}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="Type anything…"
-                  placeholderTextColor={colors.inputPlaceholder}
-                  multiline
-                  maxLength={500}
-                  onSubmitEditing={handleKeyboardSend}
-                  returnKeyType="send"
+                <LiquidGlass
+                  style={StyleSheet.absoluteFill}
+                  intensity={24}
+                  tint="light"
+                  overlay="rgba(0,0,0,0)"
+                  overlayAndroid="rgba(0,0,0,0)"
+                  fills={["rgba(255,255,255,0.88)", "rgba(153,153,153,0.18)"]}
+                  shine
                 />
+                <VoiceWaveIcon color="#FAFDFE" />
+              </TouchableOpacity>
+              {inputText.trim() ? (
                 <TouchableOpacity
-                  style={[styles.sendCircleInline, { backgroundColor: colors.sendCircleBg }]}
+                  style={styles.inputSideButton}
                   onPress={handleKeyboardSend}
-                  disabled={!inputText.trim()}
                   activeOpacity={0.85}
+                  accessibilityLabel="Send"
                 >
-                  <SendArrowIcon color={colors.sendArrowColor} />
+                  {/* Transparent dark glass to match the Read action button, so
+                      send reads as secondary next to the bright frosted voice
+                      button. Arrow is #FF0099 (like Read's glyph) to stay
+                      visible on the dark disc. */}
+                  <LiquidGlass
+                    style={StyleSheet.absoluteFill}
+                    intensity={24}
+                    tint="dark"
+                    overlay="rgba(28,12,14,0.18)"
+                    overlayAndroid="rgba(28,12,14,0.35)"
+                    shine
+                  />
+                  <SendArrowIcon color="#FF0099" size={20} />
                 </TouchableOpacity>
-              </View>
+              ) : null}
             </View>
           )}
         </View>
@@ -1056,24 +1333,29 @@ function MessageRow({ message, palette, showTimestamp, formatTime, displayText }
     );
   }
   // Other Ester messages: render markdown (Ester returns ** bold, lists, etc.)
+  // These render directly on the transcript sheet, which is always the dark
+  // maroon surface (#361416) regardless of time of day — so the text must always
+  // be the light bone tone. Using palette.textPrimary here made daytime text
+  // brown-on-brown (#361416 on #361416) = invisible.
+  const sheetText = K.bone;
   const mdStyles = {
     body: {
-      color: palette.textPrimary,
+      color: sheetText,
       fontSize: 16,
       lineHeight: 24,
     },
     paragraph: {
       marginTop: 0,
       marginBottom: 8,
-      color: palette.textPrimary,
+      color: sheetText,
     },
     strong: {
       fontWeight: "600" as const,
-      color: palette.textPrimary,
+      color: sheetText,
     },
     em: {
       fontStyle: "italic" as const,
-      color: palette.textPrimary,
+      color: sheetText,
     },
     bullet_list: {
       marginTop: 4,
@@ -1085,42 +1367,42 @@ function MessageRow({ message, palette, showTimestamp, formatTime, displayText }
     },
     list_item: {
       marginBottom: 4,
-      color: palette.textPrimary,
+      color: sheetText,
     },
     bullet_list_icon: {
-      color: palette.textPrimary,
+      color: sheetText,
     },
     ordered_list_icon: {
-      color: palette.textPrimary,
+      color: sheetText,
     },
     heading1: {
-      color: palette.textPrimary,
+      color: sheetText,
       fontSize: 20,
       fontWeight: "600" as const,
       marginTop: 8,
       marginBottom: 4,
     },
     heading2: {
-      color: palette.textPrimary,
+      color: sheetText,
       fontSize: 18,
       fontWeight: "600" as const,
       marginTop: 8,
       marginBottom: 4,
     },
     heading3: {
-      color: palette.textPrimary,
+      color: sheetText,
       fontSize: 16,
       fontWeight: "600" as const,
       marginTop: 4,
       marginBottom: 4,
     },
     link: {
-      color: palette.textPrimary,
+      color: sheetText,
       textDecorationLine: "underline" as const,
     },
     code_inline: {
-      backgroundColor: "rgba(0,0,0,0.08)",
-      color: palette.textPrimary,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      color: sheetText,
       paddingHorizontal: 4,
       borderRadius: 4,
     },
@@ -1214,6 +1496,57 @@ function TypingIndicator({ bg, dotColor }: TypingIndicatorProps) {
               backgroundColor: dotColor,
               opacity: dot,
               transform: [{ translateY: dot.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+// RES-140 — loading dots shown in the voice-call view while Ester's reply is
+// being fetched (after the user sends, before the response starts). The three
+// dots bounce up and down one at a time. Lives bottom-left, opposite the Read
+// button.
+function CallLoadingDots() {
+  const dots = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
+  useEffect(() => {
+    const STEP = 170;
+    const loops = dots.map((dot, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * STEP),
+          Animated.timing(dot, { toValue: 1, duration: 260, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 260, useNativeDriver: true }),
+          Animated.delay((dots.length - 1 - i) * STEP),
+        ])
+      )
+    );
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <View style={styles.callDots}>
+      {dots.map((dot, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.callDot,
+            {
+              transform: [
+                {
+                  translateY: dot.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -9],
+                  }),
+                },
+              ],
             },
           ]}
         />
@@ -1342,41 +1675,23 @@ function PlusIcon({ color }: { color: string }) {
   );
 }
 
-// Speaker glyph. When `muted`, the crossed-out "X" is drawn over it (TTS off);
-// otherwise just the speaker (TTS on). Two sub-paths split from the original
-// single-path Figma export.
-const SPEAKER_PATH =
-  "M4.33008 9.59621H1.05437C0.753764 9.59621 0.502833 9.49559 0.301583 9.29434C0.100528 9.09328 0 8.84235 0 8.54155V4.81755C0 4.51674 0.100528 4.26581 0.301583 4.06475C0.502833 3.8635 0.753764 3.76288 1.05437 3.76288H4.33008L7.82104 0.271922C8.10065 -0.0076896 8.42256 -0.0716623 8.78675 0.0800044C9.15094 0.231865 9.33304 0.506713 9.33304 0.904547V12.4545C9.33304 12.8524 9.15094 13.1272 8.78675 13.2791C8.42256 13.4308 8.10065 13.3668 7.82104 13.0872L4.33008 9.59621ZM7.58304 3.00455L5.07471 5.51288H1.74971V7.84621H5.07471L7.58304 10.3545V3.00455Z";
-const MUTE_X_PATH =
-  "M16.378 7.90892L13.9595 10.3277C13.7979 10.4891 13.5948 10.5717 13.3502 10.5756C13.1058 10.5793 12.899 10.4967 12.7298 10.3277C12.5608 10.1585 12.4763 9.9536 12.4763 9.71288C12.4763 9.47216 12.5608 9.26721 12.7298 9.09805L15.1486 6.67955L12.7298 4.26105C12.5684 4.09946 12.4859 3.89637 12.4822 3.65175C12.4783 3.40734 12.5608 3.20055 12.7298 3.03138C12.899 2.86241 13.1039 2.77792 13.3446 2.77792C13.5855 2.77792 13.7905 2.86241 13.9595 3.03138L16.378 5.45017L18.7965 3.03138C18.958 2.86999 19.1611 2.78735 19.4057 2.78346C19.6504 2.77977 19.8572 2.86241 20.0261 3.03138C20.1951 3.20055 20.2796 3.40549 20.2796 3.64621C20.2796 3.88694 20.1951 4.09188 20.0261 4.26105L17.6073 6.67955L20.0261 9.09805C20.1877 9.25963 20.2703 9.46273 20.274 9.70734C20.2777 9.95175 20.1951 10.1585 20.0261 10.3277C19.8572 10.4967 19.6522 10.5812 19.4113 10.5812C19.1706 10.5812 18.9656 10.4967 18.7965 10.3277L16.378 7.90892Z";
-
-// Two concentric arcs opening rightward from the speaker — the familiar
-// "sound on" wave glyph, shown only when TTS is enabled.
-const WAVE_INNER_PATH = "M11.4 4.9A2.9 2.9 0 0 1 11.4 9.1";
-const WAVE_OUTER_PATH = "M13.4 3.1A5.1 5.1 0 0 1 13.4 10.9";
+// Speaker / volume glyph (Figma export). Shown on the "Speaker" call action.
+// When `muted`, a diagonal slash is drawn over it to read as TTS-off.
+const SPEAKER_VOLUME_PATH =
+  "M12.8333 20.4167V18.025C14.5833 17.5194 15.9931 16.5472 17.0625 15.1083C18.1319 13.6694 18.6667 12.0361 18.6667 10.2083C18.6667 8.38056 18.1319 6.74722 17.0625 5.30833C15.9931 3.86944 14.5833 2.89722 12.8333 2.39167V0C15.2444 0.544444 17.2083 1.76458 18.725 3.66042C20.2417 5.55625 21 7.73889 21 10.2083C21 12.6778 20.2417 14.8604 18.725 16.7562C17.2083 18.6521 15.2444 19.8722 12.8333 20.4167ZM0 13.7375V6.7375H4.66667L10.5 0.904167V19.5708L4.66667 13.7375H0ZM12.8333 14.9042V5.5125C13.7472 5.94028 14.4618 6.58194 14.9771 7.4375C15.4924 8.29306 15.75 9.22639 15.75 10.2375C15.75 11.2292 15.4924 12.1479 14.9771 12.9937C14.4618 13.8396 13.7472 14.4764 12.8333 14.9042ZM8.16667 6.5625L5.65833 9.07083H2.33333V11.4042H5.65833L8.16667 13.9125V6.5625Z";
 
 function MuteIcon({ color, muted = true }: { color: string; muted?: boolean }) {
   return (
-    <Svg width={21} height={14} viewBox="0 0 21 14" fill="none">
-      <Path d={SPEAKER_PATH} fill={color} />
+    <Svg width={21} height={21} viewBox="0 0 21 21" fill="none">
+      <Path d={SPEAKER_VOLUME_PATH} fill={color} />
       {muted ? (
-        <Path d={MUTE_X_PATH} fill={color} />
-      ) : (
-        <>
-          <Path
-            d={WAVE_INNER_PATH}
-            stroke={color}
-            strokeWidth={1.4}
-            strokeLinecap="round"
-          />
-          <Path
-            d={WAVE_OUTER_PATH}
-            stroke={color}
-            strokeWidth={1.4}
-            strokeLinecap="round"
-          />
-        </>
-      )}
+        <Path
+          d="M1.5 1.5 L19.5 19.5"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinecap="round"
+        />
+      ) : null}
     </Svg>
   );
 }
@@ -1403,16 +1718,143 @@ function MicIcon({ color }: { color: string }) {
   );
 }
 
-function SendArrowIcon({ color }: { color: string }) {
+function SendArrowIcon({ color, size = 15 }: { color: string; size?: number }) {
   return (
-    <Svg width={15} height={15} viewBox="0 0 15 15" fill="none">
+    <Svg width={size} height={size} viewBox="0 0 15 15" fill="none">
       <Path
         d="M6.44825 2.496L1.279 7.66525C1.13033 7.81392 0.956333 7.88733 0.757 7.8855C0.557666 7.8835 0.380416 7.805 0.22525 7.65C0.0804164 7.49483 0.00541641 7.31917 0.00024974 7.123C-0.00491693 6.92683 0.0700831 6.75117 0.22525 6.596L6.5655 0.25575C6.65917 0.162083 6.75792 0.0960833 6.86175 0.0577499C6.96558 0.0192499 7.07775 0 7.19825 0C7.31875 0 7.43092 0.0192499 7.53475 0.0577499C7.63858 0.0960833 7.73733 0.162083 7.831 0.25575L14.1712 6.596C14.3097 6.7345 14.3806 6.906 14.3837 7.1105C14.3869 7.315 14.3161 7.49483 14.1712 7.65C14.0161 7.805 13.8379 7.8825 13.6367 7.8825C13.4354 7.8825 13.2572 7.805 13.102 7.65L7.94825 2.496V13.873C7.94825 14.0858 7.87642 14.264 7.73275 14.4075C7.58925 14.5512 7.41108 14.623 7.19825 14.623C6.98542 14.623 6.80725 14.5512 6.66375 14.4075C6.52008 14.264 6.44825 14.0858 6.44825 13.873V2.496Z"
+        fill={color}
+        stroke={color}
+        strokeWidth={0.7}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+// RES-140 — circular call-action button (End / Speaker / Read) with a caption.
+function VoiceActionButton({
+  label,
+  children,
+  onPress,
+  variant,
+  active,
+  busy,
+  shine,
+  fills,
+}: {
+  label: string;
+  children: React.ReactNode;
+  onPress: () => void;
+  variant?: "end";
+  active?: boolean;
+  busy?: boolean;
+  shine?: boolean;
+  fills?: string[];
+}) {
+  const isEnd = variant === "end";
+  return (
+    <View style={styles.actionItem}>
+      <TouchableOpacity
+        style={[styles.actionCircle, isEnd && styles.actionCircleEnd]}
+        onPress={onPress}
+        disabled={busy}
+        activeOpacity={0.85}
+        accessibilityLabel={label}
+      >
+        {isEnd ? (
+          // End keeps its solid red fill — render the glass with no blur and a
+          // transparent overlay so only the shine rim draws over the red.
+          <LiquidGlass
+            style={StyleSheet.absoluteFill}
+            intensity={0}
+            tint="dark"
+            overlay="rgba(0,0,0,0)"
+            overlayAndroid="rgba(0,0,0,0)"
+            shine={shine}
+          />
+        ) : (
+          <LiquidGlass
+            style={StyleSheet.absoluteFill}
+            intensity={24}
+            tint={fills ? "light" : "dark"}
+            overlay={
+              fills
+                ? "rgba(0,0,0,0)"
+                : active
+                ? "rgba(243,239,227,0.22)"
+                : "rgba(28,12,14,0.18)"
+            }
+            overlayAndroid={
+              fills
+                ? "rgba(0,0,0,0)"
+                : active
+                ? "rgba(243,239,227,0.3)"
+                : "rgba(28,12,14,0.35)"
+            }
+            fills={fills}
+            shine={shine}
+          />
+        )}
+        {busy ? <ActivityIndicator size="small" color={K.bone} /> : children}
+      </TouchableOpacity>
+      <Text style={styles.actionLabel}>{label}</Text>
+    </View>
+  );
+}
+
+// "call_end" handset — used for the End action.
+// Graphic-eq / voice waveform glyph for the input bar's voice button.
+function VoiceWaveIcon({ color = "#FAFDFE" }: { color?: string }) {
+  return (
+    <Svg width={20} height={23} viewBox="0 0 20 23" fill="none">
+      <Path
+        d="M4.52083 16.6924V5.47429C4.52083 5.22637 4.60474 5.01861 4.77254 4.851C4.94035 4.68319 5.14821 4.59929 5.39613 4.59929C5.64424 4.59929 5.852 4.68319 6.01942 4.851C6.18703 5.01861 6.27083 5.22637 6.27083 5.47429V16.6924C6.27083 16.9403 6.18693 17.1481 6.01912 17.3157C5.85132 17.4835 5.64346 17.5674 5.39554 17.5674C5.14743 17.5674 4.93967 17.4835 4.77225 17.3157C4.60464 17.1481 4.52083 16.9403 4.52083 16.6924ZM9.04167 21.2917V0.875C9.04167 0.627083 9.12557 0.41932 9.29338 0.251708C9.46118 0.0839029 9.66904 0 9.91696 0C10.1651 0 10.3728 0.0839029 10.5402 0.251708C10.7079 0.41932 10.7917 0.627083 10.7917 0.875V21.2917C10.7917 21.5396 10.7078 21.7473 10.54 21.915C10.3722 22.0828 10.1643 22.1667 9.91638 22.1667C9.66826 22.1667 9.4605 22.0828 9.29308 21.915C9.12547 21.7473 9.04167 21.5396 9.04167 21.2917ZM0 12.1377V10.029C0 9.78104 0.0839029 9.57318 0.251708 9.40537C0.419514 9.23776 0.627375 9.15396 0.875292 9.15396C1.1234 9.15396 1.33117 9.23776 1.49858 9.40537C1.66619 9.57318 1.75 9.78104 1.75 10.029V12.1377C1.75 12.3856 1.6661 12.5935 1.49829 12.7613C1.33049 12.9289 1.12263 13.0127 0.874708 13.0127C0.626597 13.0127 0.418833 12.9289 0.251417 12.7613C0.0838054 12.5935 0 12.3856 0 12.1377ZM13.5625 16.6924V5.47429C13.5625 5.22637 13.6464 5.01861 13.8142 4.851C13.982 4.68319 14.1899 4.59929 14.4378 4.59929C14.6859 4.59929 14.8937 4.68319 15.0611 4.851C15.2287 5.01861 15.3125 5.22637 15.3125 5.47429V16.6924C15.3125 16.9403 15.2286 17.1481 15.0608 17.3157C14.893 17.4835 14.6851 17.5674 14.4372 17.5674C14.1891 17.5674 13.9813 17.4835 13.8139 17.3157C13.6463 17.1481 13.5625 16.9403 13.5625 16.6924ZM18.0833 12.1377V10.029C18.0833 9.78104 18.1672 9.57318 18.335 9.40537C18.5028 9.23776 18.7107 9.15396 18.9586 9.15396C19.2067 9.15396 19.4145 9.23776 19.5819 9.40537C19.7495 9.57318 19.8333 9.78104 19.8333 10.029V12.1377C19.8333 12.3856 19.7494 12.5935 19.5816 12.7613C19.4138 12.9289 19.206 13.0127 18.958 13.0127C18.7099 13.0127 18.5022 12.9289 18.3347 12.7613C18.1671 12.5935 18.0833 12.3856 18.0833 12.1377Z"
         fill={color}
       />
     </Svg>
   );
 }
+
+// Stop-recording glyph shown on the voice button while listening: a thin dark
+// ring with a solid red square at its center (the Figma "stop" indicator).
+function StopRecordingIcon({
+  size = 30,
+  ringColor = "#361416",
+  squareColor = "#DF3E29",
+}: {
+  size?: number;
+  ringColor?: string;
+  squareColor?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 39 39" fill="none">
+      <Circle cx={19.5} cy={19.5} r={18.5} stroke={ringColor} strokeWidth={1} />
+      <Rect x={11.5} y={11.5} width={16} height={16} fill={squareColor} />
+    </Svg>
+  );
+}
+
+// Text-lines glyph for the "Read" action button.
+function ReadLinesIcon({ color = "#FF0099" }: { color?: string }) {
+  return (
+    <Svg width={19} height={17} viewBox="0 0 19 17" fill="none">
+      <Path
+        d="M0 16.3333V14H11.6667V16.3333H0ZM0 11.6667V9.33333H18.6667V11.6667H0ZM0 7V4.66667H18.6667V7H0ZM0 2.33333V0H18.6667V2.33333H0Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+// Read-along markdown styling for the call view (light text on the gradient).
+const voiceMdStyles = {
+  body: { color: K.bone, fontSize: 17, lineHeight: 25 },
+  paragraph: { marginTop: 0, marginBottom: 6, color: K.bone },
+  strong: { fontWeight: "700" as const, color: K.white },
+  em: { fontStyle: "italic" as const, color: K.bone },
+};
 
 const styles = StyleSheet.create({
   outerContainer: {
@@ -1420,6 +1862,115 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  // ---- RES-140 voice screen ------------------------------------------------
+  voiceTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    zIndex: 10,
+  },
+  voiceBody: {
+    flex: 1,
+    position: "relative",
+  },
+  voiceLogo: {
+    flex: 1,
+    width: "100%",
+    transform: [{ translateY: -54 }, { scale: 2.2 }],
+  },
+  actionsCol: {
+    position: "absolute",
+    right: 16,
+    bottom: 8,
+    alignItems: "center",
+    gap: 18,
+  },
+  // Floated above the transcript sheet (height 70%) so End + Speaker stay
+  // reachable while the modal is up. bottom:"70%" aligns to the sheet's top edge;
+  // the translateY lifts it a touch so it rests just above, not flush.
+  actionsColOverlay: {
+    position: "absolute",
+    right: 16,
+    bottom: "70%",
+    transform: [{ translateY: -6 }],
+    alignItems: "center",
+    gap: 10,
+    zIndex: 30,
+  },
+  actionItem: {
+    alignItems: "center",
+    gap: 3,
+  },
+  actionCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 999,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionCircleEnd: {
+    // Figma: #FF1919 @88% with "Plus darker" blend over the maroon gradient.
+    // RN can't do plus-darker, so this approximates the composited deep red.
+    backgroundColor: "#B21214",
+  },
+  actionLabel: {
+    fontFamily: fonts.catalogue,
+    fontSize: 12,
+    color: K.bone,
+  },
+  currentMsgWrap: {
+    position: "absolute",
+    left: spacing.lg,
+    right: 92,
+    bottom: 16,
+  },
+  // Loading dots — bottom-left, vertically aligned with the Read button.
+  callDots: {
+    position: "absolute",
+    left: spacing.lg,
+    bottom: 52,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    height: 16,
+    gap: 7,
+  },
+  callDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 999,
+    backgroundColor: K.bone,
+  },
+  transcriptSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "70%",
+    backgroundColor: "#361416",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingTop: 10,
+    zIndex: 20,
+    // Figma: box-shadow 0 -4px 80px 16px rgba(0,0,0,0.48)
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.48,
+    shadowRadius: 40,
+    elevation: 24,
+  },
+  sheetHandleHit: {
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  sheetGrip: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(243, 239, 227, 0.4)",
   },
   headerOverlay: {
     position: "absolute",
@@ -1560,6 +2111,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+    // Sit above the transcript sheet (zIndex 20) so the input bubble stays
+    // visible at the bottom of the modal when it's open.
+    zIndex: 30,
   },
   voiceCtaRow: {
     flexDirection: "row",
@@ -1579,15 +2133,22 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 999,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },
+  tapToSpeakHit: {
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 48,
+  },
   tapToSpeakText: {
-    fontFamily: fonts.dmSans,
-    fontSize: 20,
+    fontFamily: fonts.catalogue,
+    fontSize: 16,
     fontWeight: "400",
-    letterSpacing: -0.2,
-    textAlign: "center",
+    letterSpacing: -0.16,
+    textAlign: "left",
+    color: "rgba(243, 239, 227, 0.65)",
   },
   listeningPill: {
     borderRadius: 28,
@@ -1636,28 +2197,60 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
+  // Voice mode renders the pill directly in the column bottomBar, so cancel the
+  // flex:1 (which is meant for the keyboard row) and just stretch full-width.
+  inputPillVoice: {
+    flex: 0,
+    alignSelf: "stretch",
+  },
   inputPill: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 999,
+    overflow: "hidden",
     paddingLeft: 24,
-    paddingRight: 8,
-    paddingVertical: 8,
-    minHeight: 56,
-    maxHeight: 140,
+    paddingRight: 4,
+    paddingVertical: 4,
+    minHeight: 64,
+    maxHeight: 160,
     gap: 8,
   },
   input: {
     flex: 1,
     fontSize: 16,
-    lineHeight: 22,
+    // No lineHeight here: on a multiline iOS TextInput a custom lineHeight
+    // changes the paragraph/typing attributes between the empty and has-text
+    // states, which shifts the caret vertically on clear (the jump on send).
     padding: 0,
+  },
+  // Custom placeholder, vertically centered against the pill so it can't track
+  // the multiline field's transient height (the source of the jump on send).
+  inputPlaceholder: {
+    position: "absolute",
+    left: 24,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+  },
+  inputPlaceholderText: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: "rgba(243,239,227,0.55)",
   },
   sendCircleInline: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  inputSideButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 999,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },

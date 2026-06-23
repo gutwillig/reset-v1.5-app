@@ -523,6 +523,22 @@ export function EsterChatScreen() {
       revealTickRef.current = null;
     }
   };
+  // Tear down any existing audio player and create a fresh one for `uri`. We
+  // never reuse a player via replace(): on a physical device, swapping the
+  // source of a player that was mid/recently-playing (e.g. the greeting
+  // auto-read) stalls it — audio runs ~1s then halts and the reveal freezes.
+  // A fresh player is the known-good path and the simulator behaves identically.
+  const recreateAudioPlayer = (uri: string): AudioPlayer => {
+    if (audioPlayerRef.current) {
+      try {
+        audioPlayerRef.current.remove();
+      } catch {}
+      audioPlayerRef.current = null;
+    }
+    const player = createAudioPlayer({ uri });
+    audioPlayerRef.current = player;
+    return player;
+  };
 
   // Stop playback and reveal the full text immediately (clearing the gated id
   // makes the row render its complete message). Used on mute / leave / mic.
@@ -601,24 +617,19 @@ export function EsterChatScreen() {
             encoding: FileSystem.EncodingType.Base64,
           });
           if (seq === ttsSeqRef.current) {
-            if (!audioPlayerRef.current) {
-              audioPlayerRef.current = createAudioPlayer({ uri });
-            } else {
-              // Pause before swapping the source. Replacing an actively-playing
-              // player mid-playback stalls it on a physical device (currentTime
-              // stuck at 0) — which froze the reveal when a reply landed while
-              // the greeting was still reading. (The simulator masks this.)
-              try {
-                audioPlayerRef.current.pause();
-              } catch {}
-              audioPlayerRef.current.replace({ uri });
-            }
+            // Always play on a FRESH player. Reusing the player via replace()
+            // stalls it on a physical device when the prior source was mid- or
+            // recently-playing (the greeting auto-read) — audio runs ~1s then
+            // halts and the playback-synced reveal freezes. The simulator masks
+            // this. Tearing down + recreating matches the known-good
+            // first-message path (createAudioPlayer + play).
+            const player = recreateAudioPlayer(uri);
             setMessages((prev) => [...prev, message]);
             setAwaitingReply(false);
             revealStateRef.current = { id: message.id, text: message.text };
             setSpeaking(message.id);
             setReveal(0);
-            audioPlayerRef.current.play();
+            player.play();
             startRevealTick(message.id, message.text);
             return;
           }
@@ -683,12 +694,8 @@ export function EsterChatScreen() {
       await FileSystem.writeAsStringAsync(uri, audioBase64, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      if (!audioPlayerRef.current) {
-        audioPlayerRef.current = createAudioPlayer({ uri });
-      } else {
-        audioPlayerRef.current.replace({ uri });
-      }
-      audioPlayerRef.current.play();
+      const player = recreateAudioPlayer(uri);
+      player.play();
       startRevealTick(id, text, offset);
     } catch {
       // Synthesis failed — just finish revealing the text silently.
@@ -883,20 +890,11 @@ export function EsterChatScreen() {
         encoding: FileSystem.EncodingType.Base64,
       });
       if (seq !== ttsSeqRef.current) return;
-      if (!audioPlayerRef.current) {
-        audioPlayerRef.current = createAudioPlayer({ uri });
-      } else {
-        // Pause before swapping the source (see presentEsterMessage) — replacing
-        // a playing player mid-playback stalls it on a physical device.
-        try {
-          audioPlayerRef.current.pause();
-        } catch {}
-        audioPlayerRef.current.replace({ uri });
-      }
+      const player = recreateAudioPlayer(uri);
       revealStateRef.current = { id: msg.id, text: msg.text };
       setSpeaking(msg.id);
       setReveal(0);
-      audioPlayerRef.current.play();
+      player.play();
       startRevealTick(msg.id, msg.text);
     } catch {}
   };

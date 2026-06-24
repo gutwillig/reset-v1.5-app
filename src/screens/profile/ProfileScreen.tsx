@@ -21,6 +21,7 @@ import { getProfile, UserProfile } from "../../services/profile";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import { useAppPalette } from "../../hooks/useAppPalette";
 import { logEvent, setCustomAttribute } from "../../services/braze";
+import { StatDetailSheet, StatDetailData } from "./StatDetailSheet";
 
 
 // Per-type R-block logos. "Ember" alias = the Figma "Restorer" art.
@@ -433,6 +434,23 @@ export function ProfileScreen() {
       ? navigation.navigate("Scan", { mode: "rescan" })
       : navigation.navigate("Scan", { mode: "rescan" });
 
+  // RES-145: Stat Detail tooltip sheet. Each profile section's arrow opens it
+  // with the right variant + the value/trend the card is showing, so Ester's
+  // explanation matches what the user tapped.
+  const [detail, setDetail] = useState<StatDetailData | null>(null);
+  const openDetail = (d: StatDetailData) => {
+    logEvent("profile_statDetail", { metric: d.metric });
+    setDetail(d);
+  };
+  const startChatFromDetail = () => {
+    setDetail(null);
+    navigation.navigate("EsterChat", { context: "general" });
+  };
+  const goScanHistory = () => {
+    logEvent("profile_scanHistoryCTA");
+    navigation.navigate("ScanHistory");
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: surfaces.body }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -476,18 +494,28 @@ export function ProfileScreen() {
 
           {/* Your Goal */}
           <Section eyebrow="Your goal" eyebrowColor={surfaces.textStrong} dotColor={primary}>
-            <View
+            <TouchableOpacity
               style={[
                 styles.blueCard,
                 { backgroundColor: TYPE_GRADIENT_STOPS[metabolicType].anchor },
               ]}
+              activeOpacity={0.9}
+              onPress={() =>
+                openDetail({
+                  metric: "goal",
+                  variant: "simple",
+                  eyebrow: "About your goal",
+                  title: "Your goal",
+                  value: profile?.layer1?.goal ?? null,
+                })
+              }
             >
               <TypeGradientFill type={metabolicType} idKey="goal" />
               <Text style={styles.blueCardBody}>{goalText}</Text>
               <View style={styles.ghostArrowButton}>
                 <ArrowForwardIcon />
               </View>
-            </View>
+            </TouchableOpacity>
           </Section>
 
           {/* Strength + weakness */}
@@ -499,7 +527,7 @@ export function ProfileScreen() {
                   Your biggest strength
                 </Text>
               </View>
-              <View
+              <TouchableOpacity
                 style={[
                   styles.blueCard,
                   {
@@ -507,6 +535,16 @@ export function ProfileScreen() {
                     backgroundColor: TYPE_GRADIENT_STOPS[metabolicType].anchor,
                   },
                 ]}
+                activeOpacity={0.9}
+                onPress={() =>
+                  openDetail({
+                    metric: "strength",
+                    variant: "simple",
+                    eyebrow: "About your strength",
+                    title: copy.strength,
+                    value: copy.strength,
+                  })
+                }
               >
                 <TypeGradientFill type={metabolicType} idKey="strength" />
                 <Text
@@ -520,7 +558,7 @@ export function ProfileScreen() {
                 <View style={styles.ghostArrowButton}>
                   <ArrowForwardIcon />
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
             <View style={styles.strengthCol}>
               <View style={styles.eyebrowRow}>
@@ -529,7 +567,19 @@ export function ProfileScreen() {
                   Your weakness
                 </Text>
               </View>
-              <View style={[styles.outlineCard, { borderColor: surfaces.divider }]}>
+              <TouchableOpacity
+                style={[styles.outlineCard, { borderColor: surfaces.divider }]}
+                activeOpacity={0.9}
+                onPress={() =>
+                  openDetail({
+                    metric: "weakness",
+                    variant: "simple",
+                    eyebrow: "About your weakness",
+                    title: copy.weakness,
+                    value: copy.weakness,
+                  })
+                }
+              >
                 <Text
                   style={[styles.outlineCardTitle, { color: surfaces.textSubtle }]}
                   numberOfLines={1}
@@ -541,7 +591,7 @@ export function ProfileScreen() {
                 <View style={[styles.outlineArrowButton, { borderColor: surfaces.textSubtle }]}>
                   <ArrowForwardIcon color={surfaces.textSubtle} />
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -559,7 +609,20 @@ export function ProfileScreen() {
                   accent={primary}
                   level={stressLevel}
                   evening={palette.evening}
-                  onPress={goScan}
+                  onPress={() =>
+                    openDetail({
+                      metric: "stress",
+                      variant: "signal",
+                      eyebrow: "About Today's Signals",
+                      title: "Stress Index",
+                      value: stressWord,
+                      trend: stressTrendDir,
+                      trendText: deltaText(stressTrendDir),
+                      number: latestStressIdx,
+                      series: stressSeries,
+                      level: stressLevel,
+                    })
+                  }
                 />
                 <SignalBanner
                   title="Energy"
@@ -571,7 +634,21 @@ export function ProfileScreen() {
                   accent={primary}
                   level={energyLevel}
                   evening={palette.evening}
-                  onPress={goScan}
+                  onPress={() =>
+                    openDetail({
+                      metric: "energy",
+                      variant: "signal",
+                      eyebrow: "About Today's Signals",
+                      title: "Energy",
+                      value: energyWord,
+                      valueBig: energyWord,
+                      trend: energyTrendDir,
+                      trendText: deltaText(energyTrendDir),
+                      number: null,
+                      series: energySeries,
+                      level: energyLevel,
+                    })
+                  }
                 />
                 <SignalBanner
                   title="Recovery"
@@ -583,7 +660,21 @@ export function ProfileScreen() {
                   accent={primary}
                   level={recoveryLevel}
                   evening={palette.evening}
-                  onPress={goScan}
+                  onPress={() =>
+                    openDetail({
+                      metric: "recovery",
+                      variant: "signal",
+                      eyebrow: "About Today's Signals",
+                      title: "Recovery",
+                      value: recoveryWord,
+                      valueBig: recoveryWord,
+                      trend: recoveryTrendDir,
+                      trendText: deltaText(recoveryTrendDir),
+                      number: null,
+                      series: recoverySeries,
+                      level: recoveryLevel,
+                    })
+                  }
                 />
               </View>
             ) : (
@@ -672,7 +763,7 @@ export function ProfileScreen() {
               {/* See previous scans */}
               <TouchableOpacity
                 style={[styles.previousScans, { borderColor: surfaces.divider }]}
-                onPress={() => (navigation as any).navigate("WeeklyReview")}
+                onPress={goScanHistory}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.previousScansText, { color: surfaces.textStrong }]}>
@@ -709,7 +800,16 @@ export function ProfileScreen() {
                 </Text>
                 <TouchableOpacity
                   style={[styles.confidenceButton, { backgroundColor: primary }]}
-                  onPress={() => navigation.navigate("EsterChat", { context: "general" })}
+                  onPress={() =>
+                    openDetail({
+                      metric: "confidence",
+                      variant: "confidence",
+                      eyebrow: "About your confidence",
+                      title: "Confidence Score",
+                      value: `${confidencePct}%`,
+                      pct: confidencePct,
+                    })
+                  }
                   activeOpacity={0.85}
                 >
                   <Text style={styles.confidenceButtonText}>What does this mean?</Text>
@@ -725,6 +825,15 @@ export function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <StatDetailSheet
+        visible={detail != null}
+        data={detail}
+        accent={primary}
+        evening={palette.evening}
+        onClose={() => setDetail(null)}
+        onStartChat={startChatFromDetail}
+      />
     </View>
   );
 }

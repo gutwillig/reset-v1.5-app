@@ -13,6 +13,7 @@ import { YapCallScreen } from "../screens/yap/YapCallScreen";
 import { ScanScreen } from "../screens/onboarding/ScanScreen";
 import { ScanResultsScreen } from "../screens/scan/ScanResultsScreen";
 import { ScanInsightsScreen } from "../screens/scan/ScanInsightsScreen";
+import { ScanHistoryScreen } from "../screens/scan/ScanHistoryScreen";
 import { SavedMealsScreen } from "../screens/favorites/SavedMealsScreen";
 import { WeeklyReviewScreen } from "../screens/review/WeeklyReviewScreen";
 import { TabBar } from "../components";
@@ -48,6 +49,7 @@ export type MainStackParamList = {
   };
   ScanResults: undefined;
   ScanInsights: { fromAppOpen?: boolean } | undefined;
+  ScanHistory: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -179,6 +181,14 @@ export function MainNavigator() {
       <Stack.Screen
         name="ScanInsights"
         component={ScanInsightsScreen}
+      />
+      <Stack.Screen
+        name="ScanHistory"
+        component={ScanHistoryScreen}
+        options={{
+          presentation: "modal",
+          animation: "slide_from_bottom",
+        }}
       />
     </Stack.Navigator>
   );

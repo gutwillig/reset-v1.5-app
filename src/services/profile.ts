@@ -129,6 +129,64 @@ export async function updateProfile(
   });
 }
 
+// ── RES-145: profile detail tooltips + scan/survey history ────────────────
+
+export type ProfileMetric =
+  | "stress"
+  | "energy"
+  | "recovery"
+  | "confidence"
+  | "strength"
+  | "weakness"
+  | "goal";
+
+export interface ProfileInsight {
+  text: string;
+  cached: boolean;
+}
+
+/**
+ * Ester's plain-language explanation of one profile metric, shown in the
+ * Stat Detail sheet. The `title`/`value`/`trend` the card is displaying are
+ * forwarded so the blurb matches what the user is looking at; the backend
+ * fills in the rest from the user's signals. Backend caches per user/metric/day.
+ */
+export async function getProfileInsight(
+  metric: ProfileMetric,
+  opts?: { title?: string | null; value?: string | null; trend?: "up" | "down" | "same" | null },
+): Promise<ProfileInsight> {
+  const params = new URLSearchParams();
+  if (opts?.title) params.set("title", opts.title);
+  if (opts?.value) params.set("value", opts.value);
+  if (opts?.trend) params.set("trend", opts.trend);
+  const qs = params.toString();
+  return apiClient<ProfileInsight>(
+    `/api/profile/insight/${metric}${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export interface ScoreHistoryEntry {
+  date: string; // YYYY-MM-DD
+  label: string; // "May 8, 2026"
+  score: number; // 0-100
+}
+
+export interface ScoreHistoryMonth {
+  monthKey: string; // "2026-05"
+  month: string; // "May 2026"
+  count: number;
+  entries: ScoreHistoryEntry[];
+}
+
+export interface ScoreHistory {
+  scans: ScoreHistoryMonth[];
+  surveys: ScoreHistoryMonth[];
+}
+
+export async function getScoreHistory(): Promise<ScoreHistory> {
+  return apiClient<ScoreHistory>("/api/profile/history");
+}
+
 export async function submitScanResults(
   scanData: Record<string, any>,
 ): Promise<{ message: string; scanCount: number }> {

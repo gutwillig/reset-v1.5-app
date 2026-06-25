@@ -21,6 +21,7 @@ import { getProfile, UserProfile } from "../../services/profile";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import { useAppPalette } from "../../hooks/useAppPalette";
 import { logEvent, setCustomAttribute } from "../../services/braze";
+import { StatDetailSheet, StatDetailData } from "./StatDetailSheet";
 
 
 // Per-type R-block logos. "Ember" alias = the Figma "Restorer" art.
@@ -312,22 +313,9 @@ export function ProfileScreen() {
   const latestScan = biometricsFresh ? profile?.layer3.latestScan : null;
 
   // --- Signals (stress / energy / recovery) -------------------------------
-  const stressTagsSorted = [...(profile?.layer2?.stressTags ?? [])].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-  );
-  const stressLevelFromTags = (tags: string[] | undefined) => {
-    if (!tags || tags.length === 0) return null;
-    const onlyNone = tags.every((t) => t.toLowerCase() === "none");
-    return onlyNone ? "low" : "high";
-  };
-  const currentStressLevel = stressLevelFromTags(stressTagsSorted[0]?.tags);
-  const priorStressLevel = stressLevelFromTags(stressTagsSorted[1]?.tags);
-  const stressWord =
-    currentStressLevel === "low"
-      ? "Stable"
-      : currentStressLevel === "high"
-        ? "Elevated"
-        : cap(String(typeConfig.signals.stress));
+  // Stress is scan-first: the word, number, trend, and graph all derive from
+  // the scan stressIndex (see `stressWord` below). The check-in stress survey
+  // is intentionally NOT used for this headline.
 
   const energyLogSorted = [...(profile?.layer2?.energyLog ?? [])].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -376,6 +364,19 @@ export function ProfileScreen() {
     .slice(-7);
   const latestStressIdx = stressSeries.length ? stressSeries[stressSeries.length - 1] : null;
 
+  // Scan-derived stress word (mirrors Recovery's threshold pattern). Higher
+  // stressIndex = more stress; thresholds sit on the same ~20–80 plausible
+  // range used for `stressLevel`. Falls back to the type's default copy when
+  // there's no scan yet.
+  const stressWord =
+    latestStressIdx != null
+      ? latestStressIdx >= 60
+        ? "Elevated"
+        : latestStressIdx >= 40
+          ? "Moderate"
+          : "Stable"
+      : cap(String(typeConfig.signals.stress));
+
   // Normalized 0–1 value level per signal — drives the single-data-point line
   // slope (up = high, down = low, flat = middle). Ranges are the plausible
   // span for each metric (stress/recovery indices, energy rank 1–4).
@@ -386,10 +387,12 @@ export function ProfileScreen() {
   const energyLevel = norm01(energyRank(energyLogSorted[0]?.energy ?? null), 1, 4);
 
   // Trends
-  const STRESS_RANK = { low: 0, high: 1 } as const;
+  // Stress trend tracks the same stressIndex series the graph plots (latest
+  // scan vs the one before), so the arrow always matches the line's end slope.
+  // Higher stressIndex = more stress, so "up" = more stressed.
   const stressTrendDir = dirFromNumbers(
-    currentStressLevel ? STRESS_RANK[currentStressLevel] : null,
-    priorStressLevel ? STRESS_RANK[priorStressLevel] : null,
+    latestStressIdx,
+    stressSeries.length >= 2 ? stressSeries[stressSeries.length - 2] : null,
   );
   const recoveryTrendDir = dirFromNumbers(recoveryCurrent, recoveryPrior);
   const energyTrendDir = dirFromNumbers(
@@ -401,6 +404,15 @@ export function ProfileScreen() {
   const daysToFull = profile?.confidence
     ? Math.max(5, Math.min(120, 100 - confidencePct))
     : 0;
+
+  // Confidence only ever climbs (it accrues from scans + check-ins, never
+  // drops), so the 24h trend is just "did anything come in today?" —
+  // `biometricsFresh` is exactly a scan-or-check-in-within-24h signal. Hence
+  // the trend is only ever "up" or "same".
+  const confidenceTrendDir: TrendDirection = biometricsFresh ? "up" : "same";
+  const confidenceTrendText = biometricsFresh
+    ? "Up over the last 24 hours"
+    : "Steady over the last 24 hours";
 
   const authFullName = [
     state.auth.authUser?.firstName,
@@ -432,6 +444,33 @@ export function ProfileScreen() {
     hasScan
       ? navigation.navigate("Scan", { mode: "rescan" })
       : navigation.navigate("Scan", { mode: "rescan" });
+
+  // RES-145: Stat Detail tooltip sheet. Each profile section's arrow opens it
+  // with the right variant + the value/trend the card is showing, so Ester's
+  // explanation matches what the user tapped.
+  const [detail, setDetail] = useState<StatDetailData | null>(null);
+  const openDetail = (d: StatDetailData) => {
+    logEvent("profile_statDetail", { metric: d.metric });
+    setDetail(d);
+  };
+  const startChatFromDetail = (topic: {
+    kind:
+      | "stress"
+      | "energy"
+      | "recovery"
+      | "confidence"
+      | "strength"
+      | "weakness"
+      | "goal";
+    label?: string | null;
+  }) => {
+    setDetail(null);
+    navigation.navigate("EsterChat", { context: "general", topic });
+  };
+  const goScanHistory = () => {
+    logEvent("profile_scanHistoryCTA");
+    navigation.navigate("ScanHistory");
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: surfaces.body }]}>
@@ -476,18 +515,28 @@ export function ProfileScreen() {
 
           {/* Your Goal */}
           <Section eyebrow="Your goal" eyebrowColor={surfaces.textStrong} dotColor={primary}>
-            <View
+            <TouchableOpacity
               style={[
                 styles.blueCard,
                 { backgroundColor: TYPE_GRADIENT_STOPS[metabolicType].anchor },
               ]}
+              activeOpacity={0.9}
+              onPress={() =>
+                openDetail({
+                  metric: "goal",
+                  variant: "simple",
+                  eyebrow: "About your goal",
+                  title: "Your goal",
+                  value: profile?.layer1?.goal ?? null,
+                })
+              }
             >
               <TypeGradientFill type={metabolicType} idKey="goal" />
               <Text style={styles.blueCardBody}>{goalText}</Text>
               <View style={styles.ghostArrowButton}>
                 <ArrowForwardIcon />
               </View>
-            </View>
+            </TouchableOpacity>
           </Section>
 
           {/* Strength + weakness */}
@@ -499,7 +548,7 @@ export function ProfileScreen() {
                   Your biggest strength
                 </Text>
               </View>
-              <View
+              <TouchableOpacity
                 style={[
                   styles.blueCard,
                   {
@@ -507,6 +556,16 @@ export function ProfileScreen() {
                     backgroundColor: TYPE_GRADIENT_STOPS[metabolicType].anchor,
                   },
                 ]}
+                activeOpacity={0.9}
+                onPress={() =>
+                  openDetail({
+                    metric: "strength",
+                    variant: "simple",
+                    eyebrow: "About your strength",
+                    title: copy.strength,
+                    value: copy.strength,
+                  })
+                }
               >
                 <TypeGradientFill type={metabolicType} idKey="strength" />
                 <Text
@@ -520,7 +579,7 @@ export function ProfileScreen() {
                 <View style={styles.ghostArrowButton}>
                   <ArrowForwardIcon />
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
             <View style={styles.strengthCol}>
               <View style={styles.eyebrowRow}>
@@ -529,7 +588,19 @@ export function ProfileScreen() {
                   Your weakness
                 </Text>
               </View>
-              <View style={[styles.outlineCard, { borderColor: surfaces.divider }]}>
+              <TouchableOpacity
+                style={[styles.outlineCard, { borderColor: surfaces.divider }]}
+                activeOpacity={0.9}
+                onPress={() =>
+                  openDetail({
+                    metric: "weakness",
+                    variant: "simple",
+                    eyebrow: "About your weakness",
+                    title: copy.weakness,
+                    value: copy.weakness,
+                  })
+                }
+              >
                 <Text
                   style={[styles.outlineCardTitle, { color: surfaces.textSubtle }]}
                   numberOfLines={1}
@@ -541,7 +612,7 @@ export function ProfileScreen() {
                 <View style={[styles.outlineArrowButton, { borderColor: surfaces.textSubtle }]}>
                   <ArrowForwardIcon color={surfaces.textSubtle} />
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -559,7 +630,20 @@ export function ProfileScreen() {
                   accent={primary}
                   level={stressLevel}
                   evening={palette.evening}
-                  onPress={goScan}
+                  onPress={() =>
+                    openDetail({
+                      metric: "stress",
+                      variant: "signal",
+                      eyebrow: "About Today's Signals",
+                      title: "Stress Index",
+                      value: stressWord,
+                      trend: stressTrendDir,
+                      trendText: deltaText(stressTrendDir),
+                      number: latestStressIdx,
+                      series: stressSeries,
+                      level: stressLevel,
+                    })
+                  }
                 />
                 <SignalBanner
                   title="Energy"
@@ -571,7 +655,21 @@ export function ProfileScreen() {
                   accent={primary}
                   level={energyLevel}
                   evening={palette.evening}
-                  onPress={goScan}
+                  onPress={() =>
+                    openDetail({
+                      metric: "energy",
+                      variant: "signal",
+                      eyebrow: "About Today's Signals",
+                      title: "Energy",
+                      value: energyWord,
+                      valueBig: energyWord,
+                      trend: energyTrendDir,
+                      trendText: deltaText(energyTrendDir),
+                      number: null,
+                      series: energySeries,
+                      level: energyLevel,
+                    })
+                  }
                 />
                 <SignalBanner
                   title="Recovery"
@@ -583,7 +681,21 @@ export function ProfileScreen() {
                   accent={primary}
                   level={recoveryLevel}
                   evening={palette.evening}
-                  onPress={goScan}
+                  onPress={() =>
+                    openDetail({
+                      metric: "recovery",
+                      variant: "signal",
+                      eyebrow: "About Today's Signals",
+                      title: "Recovery",
+                      value: recoveryWord,
+                      valueBig: recoveryWord,
+                      trend: recoveryTrendDir,
+                      trendText: deltaText(recoveryTrendDir),
+                      number: null,
+                      series: recoverySeries,
+                      level: recoveryLevel,
+                    })
+                  }
                 />
               </View>
             ) : (
@@ -672,7 +784,7 @@ export function ProfileScreen() {
               {/* See previous scans */}
               <TouchableOpacity
                 style={[styles.previousScans, { borderColor: surfaces.divider }]}
-                onPress={() => (navigation as any).navigate("WeeklyReview")}
+                onPress={goScanHistory}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.previousScansText, { color: surfaces.textStrong }]}>
@@ -709,7 +821,18 @@ export function ProfileScreen() {
                 </Text>
                 <TouchableOpacity
                   style={[styles.confidenceButton, { backgroundColor: primary }]}
-                  onPress={() => navigation.navigate("EsterChat", { context: "general" })}
+                  onPress={() =>
+                    openDetail({
+                      metric: "confidence",
+                      variant: "confidence",
+                      eyebrow: "About your confidence",
+                      title: "Confidence Score",
+                      value: `${confidencePct}%`,
+                      pct: confidencePct,
+                      trend: confidenceTrendDir,
+                      trendText: confidenceTrendText,
+                    })
+                  }
                   activeOpacity={0.85}
                 >
                   <Text style={styles.confidenceButtonText}>What does this mean?</Text>
@@ -725,6 +848,16 @@ export function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <StatDetailSheet
+        visible={detail != null}
+        data={detail}
+        accent={primary}
+        evening={palette.evening}
+        typeLogo={TYPE_LOGO[metabolicType]}
+        onClose={() => setDetail(null)}
+        onStartChat={startChatFromDetail}
+      />
     </View>
   );
 }

@@ -13,6 +13,7 @@ import { YapCallScreen } from "../screens/yap/YapCallScreen";
 import { ScanScreen } from "../screens/onboarding/ScanScreen";
 import { ScanResultsScreen } from "../screens/scan/ScanResultsScreen";
 import { ScanInsightsScreen } from "../screens/scan/ScanInsightsScreen";
+import { ScanHistoryScreen } from "../screens/scan/ScanHistoryScreen";
 import { SavedMealsScreen } from "../screens/favorites/SavedMealsScreen";
 import { WeeklyReviewScreen } from "../screens/review/WeeklyReviewScreen";
 import { TabBar } from "../components";
@@ -31,6 +32,19 @@ export type MainStackParamList = {
   EsterChat: {
     context?: "general" | "meal" | "score";
     meal?: Meal;
+    // RES-145: opens the chat with a context-specific Ester greeting about a
+    // profile metric (e.g. the user's strength/weakness/goal/signal).
+    topic?: {
+      kind:
+        | "stress"
+        | "energy"
+        | "recovery"
+        | "confidence"
+        | "strength"
+        | "weakness"
+        | "goal";
+      label?: string | null;
+    };
   };
   RecipeDetail: {
     meal: Meal;
@@ -48,6 +62,7 @@ export type MainStackParamList = {
   };
   ScanResults: undefined;
   ScanInsights: { fromAppOpen?: boolean } | undefined;
+  ScanHistory: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -180,6 +195,7 @@ export function MainNavigator() {
         name="ScanInsights"
         component={ScanInsightsScreen}
       />
+      <Stack.Screen name="ScanHistory" component={ScanHistoryScreen} />
     </Stack.Navigator>
   );
 }

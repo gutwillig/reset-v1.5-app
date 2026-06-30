@@ -12,7 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useApp } from "../../context/AppContext";
 import Svg, { Path } from "react-native-svg";
-import { K, toMetabolicType } from "../../constants/colors";
+import { K, toMetabolicType, type MetabolicType } from "../../constants/colors";
 import { fonts, spacing, radius } from "../../constants/typography";
 import {
   generateGreeting,
@@ -34,13 +34,23 @@ import { useAppPalette } from "../../hooks/useAppPalette";
 import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 
+// Per-type mascot hero. The user's metabolic type drives which gradient logo
+// bleeds off the card's top-left. (Ember's asset uses the "Restorer" name.)
+const TYPE_MASCOT: Record<MetabolicType, ReturnType<typeof require>> = {
+  Burner: require("../../../assets/images/type-mascots/Burner.png"),
+  Rebounder: require("../../../assets/images/type-mascots/Rebounder.png"),
+  Ember: require("../../../assets/images/type-mascots/Restorer.png"),
+  Chameleon: require("../../../assets/images/type-mascots/Chameleon.png"),
+  Explorer: require("../../../assets/images/type-mascots/Explorer.png"),
+};
+
 export function AppOpenGreetingScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppOpenStackParamList>>();
   const { state } = useApp();
   const insets = useSafeAreaInsets();
   const palette = useAppPalette();
-  const { evening, outerBg, innerBg, textColor, subtleText, nestedBg, statusBarStyle } =
+  const { outerBg, innerBg, textColor, subtleText, nestedBg, statusBarStyle } =
     palette;
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -119,9 +129,7 @@ export function AppOpenGreetingScreen() {
     return generateGreeting(ctx);
   })();
 
-  const mascotSource = evening
-    ? require("../../../assets/images/mascot-shape-bone.png")
-    : require("../../../assets/images/mascot-shape-ochre.png");
+  const mascotSource = TYPE_MASCOT[metabolicType];
 
   const score = resetScore?.score ?? null;
   const confidence = profile?.confidence?.composite ?? null;
@@ -161,7 +169,7 @@ export function AppOpenGreetingScreen() {
           <View style={styles.mascotWrap} pointerEvents="none">
             <Image
               source={mascotSource}
-              style={[styles.mascotImage, styles.mascotTransform]}
+              style={styles.mascotImage}
               resizeMode="contain"
             />
           </View>
@@ -259,19 +267,16 @@ const styles = StyleSheet.create({
   },
   mascotWrap: {
     position: "absolute",
-    top: -50,
-    left: -70,
-    width: 320,
-    height: 320,
+    top: -90,
+    left: -105,
+    width: 426,
+    height: 426,
     alignItems: "center",
     justifyContent: "center",
   },
   mascotImage: {
     width: "100%",
     height: "100%",
-  },
-  mascotTransform: {
-    transform: [{ rotate: "-155.06deg" }, { scaleY: -1 }],
   },
   contentColumn: {
     flex: 1,

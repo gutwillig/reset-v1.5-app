@@ -1,26 +1,74 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   Image,
+  Animated,
   StyleSheet,
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, useRoute, CommonActions, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Svg, { Path } from "react-native-svg";
 import { K } from "../../constants/colors";
-import { fonts, spacing, radius } from "../../constants/typography";
+import { fonts, spacing } from "../../constants/typography";
 import { getProfile } from "../../services/profile";
 import { getCheckInHistory } from "../../services/checkIn";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import { useAppPalette } from "../../hooks/useAppPalette";
-import { useSwipeToAdvance } from "../../hooks/useSwipeToAdvance";
 import { useApp } from "../../context/AppContext";
 import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
+
+// Ester message body color. Figma bone-surface/on-bone-subtle in day; a lighter
+// version of the same warm tone in evening so it stays readable on the dark card.
+const MIDDLE_TEXT_DAY = "#7E6869";
+const MIDDLE_TEXT_EVENING = "#E6DCDC";
+
+// Ester "typing" indicator — three pulsing dots shown while the message and
+// option cards animate in.
+function TypingDots({ color }: { color: string }) {
+  const dots = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
+  useEffect(() => {
+    const anims = dots.map((d, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 150),
+          Animated.timing(d, { toValue: 1, duration: 300, useNativeDriver: true }),
+          Animated.timing(d, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.delay((2 - i) * 150),
+        ]),
+      ),
+    );
+    anims.forEach((a) => a.start());
+    return () => anims.forEach((a) => a.stop());
+  }, []);
+  return (
+    <View style={styles.dots}>
+      {dots.map((d, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.dot,
+            {
+              backgroundColor: color,
+              opacity: d.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+              transform: [
+                { translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) },
+              ],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
 
 export function DataGateScreen() {
   const navigation =
@@ -28,9 +76,17 @@ export function DataGateScreen() {
   const route = useRoute<RouteProp<AppOpenStackParamList, "DataGate">>();
   const debugForceShow = route.params?.debugForceShow === true;
   const insets = useSafeAreaInsets();
-  const { outerBg, innerBg, nestedBg, textColor, subtleText, borderColor, statusBarStyle } =
+  const { outerBg, innerBg, textColor, subtleText, statusBarStyle, evening } =
     useAppPalette();
   const { state: appState } = useApp();
+
+  const middleText = evening ? MIDDLE_TEXT_EVENING : MIDDLE_TEXT_DAY;
+
+  // Reuse the app-open Greeting hero: the day/evening mascot shape, rotated to
+  // match the Figma render treatment. (Placeholder until per-type renders land.)
+  const mascotSource = evening
+    ? require("../../../assets/images/mascot-shape-bone.png")
+    : require("../../../assets/images/mascot-shape-ochre.png");
 
   const [lastScanAt, setLastScanAt] = useState<string | null>(null);
   const [lastCheckInAt, setLastCheckInAt] = useState<string | null>(null);
@@ -49,30 +105,30 @@ export function DataGateScreen() {
 
   const { isFresh } = useBiometricFreshness(lastScanAt, lastCheckInAt);
 
+  // Show the typing dots first, then crossfade to the message + option cards.
+  const reveal = useRef(new Animated.Value(0)).current;
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => {
+      Animated.timing(reveal, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => setRevealed(true));
+    }, 900);
+    return () => clearTimeout(t);
+  }, [ready, reveal]);
+
   useEffect(() => {
     if (ready && isFresh && !debugForceShow) {
       navigation.replace("ScoreReveal");
     }
   }, [ready, isFresh, debugForceShow, navigation]);
 
-  const exitToHome = () => {
-    const parent = navigation.getParent();
-    parent?.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: "Tabs" }],
-      }),
-    );
-  };
-
   const handleScan = () => {
     const parent = navigation.getParent();
     parent?.navigate("Scan", { mode: "rescan", returnTo: "ScoreReveal" });
-  };
-
-  const handleAskEster = () => {
-    const parent = navigation.getParent();
-    parent?.navigate("EsterChat", { context: "general" });
   };
 
   const handleSurvey = () => {
@@ -81,135 +137,108 @@ export function DataGateScreen() {
     );
   };
 
-  const handleSkipToScore = () => {
-    navigation.replace("ScoreReveal");
-  };
-
-  const swipeHandlers = useSwipeToAdvance({
-    axis: "down",
-    onAdvance: handleSkipToScore,
-    enabled: ready && (debugForceShow || !isFresh),
-  });
-
   if (!ready || (isFresh && !debugForceShow)) {
     return (
       <View style={[styles.root, { backgroundColor: outerBg }]}>
-        <ActivityIndicator
-          size="large"
-          color={textColor}
-          style={styles.loader}
-        />
+        <ActivityIndicator size="large" color={textColor} style={styles.loader} />
       </View>
     );
   }
 
+  // "Best option" (scan) banner inverts against the card so it always reads as
+  // the primary CTA in both day and evening palettes.
+  const scanBg = textColor;
+  const scanText = innerBg;
+
   return (
-    <View
-      style={[styles.root, { backgroundColor: outerBg }]}
-      {...swipeHandlers}
-    >
+    <View style={[styles.root, { backgroundColor: outerBg }]}>
       <StatusBar barStyle={statusBarStyle} translucent />
       <View
         style={[
           styles.safe,
-          {
-            paddingTop: insets.top + 12,
-            paddingBottom: insets.bottom + 12,
-          },
+          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 },
         ]}
       >
         <View style={[styles.card, { backgroundColor: innerBg }]}>
-          <View style={styles.cardInner}>
-            <View style={styles.cardTop}>
-              <View style={styles.header}>
-                <View style={styles.brandLogo}>
-                  <Image
-                    source={require("../../../assets/images/quick-scan-mascot.png")}
-                    style={[styles.brandLogoImage, { tintColor: textColor }]}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={[styles.title, { color: textColor }]} pointerEvents="none">
-                  Quick scan
-                </Text>
-              </View>
+          {/* Hero — bleeds off the top-left, clipped by the card. */}
+          <View style={styles.mascotWrap} pointerEvents="none">
+            <Image
+              source={mascotSource}
+              style={[styles.mascotImage, styles.mascotTransform]}
+              resizeMode="contain"
+            />
+          </View>
 
-              <Text style={[styles.intro, { color: textColor }]}>
-                We'll start with a quick scan to get your bio-signatures in
-                check. That'll allow me to work with the absolute latest
-                version of you.
-              </Text>
-
-              <View style={styles.cardRow}>
-                <TouchableOpacity
-                  style={[styles.optionCard, styles.optionCardLeft, { backgroundColor: nestedBg }]}
-                  onPress={handleScan}
-                  activeOpacity={0.85}
+          <View style={styles.cardBody}>
+            {/* Ester message — dots show first, then crossfade to the text. */}
+            <View style={styles.message}>
+              {!revealed && (
+                <Animated.View
+                  style={[
+                    styles.dotsOverlay,
+                    { opacity: reveal.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
+                  ]}
+                  pointerEvents="none"
                 >
-                  <View style={styles.optionTextWrap}>
-                    <Text style={[styles.optionLabel, { color: textColor }]}>
-                      I'm ready to scan in
-                    </Text>
-                    <Text style={[styles.optionMeta, { color: textColor }]}>Best option</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.optionCard, styles.optionCardRight, { backgroundColor: nestedBg }]}
-                  onPress={handleSurvey}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.optionTextWrap}>
-                    <Text style={[styles.optionLabel, { color: textColor }]}>
-                      Do the survey instead today
-                    </Text>
-                    <Text style={[styles.optionMeta, { color: textColor }]}>Quickest option</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.skipPill, { borderColor }]}
-                onPress={handleSkipToScore}
-                activeOpacity={0.8}
+                  <TypingDots color={subtleText} />
+                </Animated.View>
+              )}
+              <Animated.View
+                style={{
+                  opacity: reveal,
+                  transform: [
+                    { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) },
+                  ],
+                }}
               >
-                <Text style={[styles.skipLabel, { color: subtleText }]}>
-                  Skip to my score →
+                <Text style={[styles.body, { color: middleText }]}>
+                  Let's start with a{" "}
+                  <Text style={[styles.bodyStrong, { color: textColor }]}>quick scan</Text>{" "}
+                  to get your bio-signatures in check. That'll allow me to work
+                  with the absolute latest version of you.
+                </Text>
+              </Animated.View>
+            </View>
+
+            {/* Two-option banner row */}
+            <Animated.View style={[styles.bannerRow, { opacity: reveal }]}>
+              <TouchableOpacity
+                style={[styles.banner, styles.surveyBanner]}
+                onPress={handleSurvey}
+                activeOpacity={0.85}
+              >
+                <View style={styles.bannerTop}>
+                  <Text style={[styles.bannerKicker, { color: K.brown }]}>Quick option</Text>
+                  <ArrowForward color={K.brown} size={14} />
+                </View>
+                <Text style={[styles.bannerLabel, { color: K.brown }]}>
+                  Do the survey instead today
                 </Text>
               </TouchableOpacity>
 
-            </View>
-
-            <View style={styles.ctaRow}>
               <TouchableOpacity
-                style={[styles.askEsterPill, { backgroundColor: innerBg, borderColor }]}
-                onPress={handleAskEster}
-                activeOpacity={0.8}
+                style={[styles.banner, styles.scanBanner, { backgroundColor: scanBg }]}
+                onPress={handleScan}
+                activeOpacity={0.85}
               >
-                <View style={styles.askEsterAvatar}>
-                  <Image
-                    source={require("../../../assets/images/ester-logo.png")}
-                    style={styles.askEsterAvatarImage}
-                    resizeMode="contain"
-                  />
+                <View style={styles.bannerTop}>
+                  <Text style={[styles.bannerKicker, { color: scanText }]}>Best option</Text>
+                  <ArrowForward color={scanText} size={14} />
                 </View>
-                <Text style={[styles.askEsterLabel, { color: textColor }]}>Ask Ester</Text>
+                <View style={styles.scanBottom}>
+                  <Text
+                    style={[styles.bannerLabel, { color: scanText, flex: 1 }]}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                  >
+                    I'm ready to scan in
+                  </Text>
+                  <View style={[styles.scanArrow, { backgroundColor: innerBg }]}>
+                    <ArrowForward color={textColor} size={22} />
+                  </View>
+                </View>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.arrowButton, { backgroundColor: innerBg, borderColor: textColor }]}
-                onPress={exitToHome}
-                activeOpacity={0.8}
-              >
-                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M12 5v14M5 12l7 7 7-7"
-                    stroke={textColor}
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-              </TouchableOpacity>
-            </View>
+            </Animated.View>
           </View>
         </View>
       </View>
@@ -217,154 +246,141 @@ export function DataGateScreen() {
   );
 }
 
+function ArrowForward({ color, size }: { color: string; size: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M5 12h14M13 6l6 6-6 6"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+const CARD_RADIUS = 40;
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  safe: { flex: 1 },
+  safe: { flex: 1, paddingHorizontal: 12 },
   loader: { flex: 1, alignSelf: "center" },
   card: {
     flex: 1,
-    marginHorizontal: 12,
-    borderRadius: 28,
+    borderRadius: CARD_RADIUS,
     overflow: "hidden",
+    shadowColor: "#220A0A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.38,
+    shadowRadius: 6,
+    elevation: 6,
   },
-  cardInner: {
-    flex: 1,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-  },
-  cardTop: {
-    flex: 1,
-    gap: spacing.xl,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-  },
-  brandLogo: {
-    width: 48,
-    height: 48,
+  mascotWrap: {
+    position: "absolute",
+    top: -50,
+    left: -70,
+    width: 320,
+    height: 320,
     alignItems: "center",
     justifyContent: "center",
   },
-  brandLogoImage: {
+  mascotImage: {
     width: "100%",
     height: "100%",
   },
-  title: {
+  mascotTransform: {
+    transform: [{ rotate: "-155.06deg" }, { scaleY: -1 }],
+  },
+  cardBody: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: 260,
+    paddingBottom: spacing.xl,
+    justifyContent: "flex-end",
+    gap: spacing.xl,
+  },
+  message: {
+    gap: 6,
+  },
+  dotsOverlay: {
     position: "absolute",
+    top: 4,
     left: 0,
-    right: 0,
-    textAlign: "center",
-    fontFamily: fonts.dmSansBold,
-    fontSize: 26,
-    letterSpacing: -0.3,
   },
-  intro: {
-    fontFamily: fonts.dmSans,
-    fontSize: 22,
-    lineHeight: 28,
-    letterSpacing: -0.22,
-  },
-  cardRow: {
+  dots: {
     flexDirection: "row",
-    gap: spacing.sm,
-    height: 160,
+    gap: 4,
+    marginBottom: 2,
+    paddingLeft: 4,
   },
-  optionCard: {
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  body: {
+    // The Greeting screen's middle-text style (dmSans 16/22/-0.16), scaled +25%.
+    fontFamily: fonts.dmSans,
+    fontSize: 20,
+    lineHeight: 28,
+    letterSpacing: -0.2,
+  },
+  bodyStrong: {
+    fontFamily: fonts.dmSansBold,
+  },
+  bannerRow: {
+    flexDirection: "row",
+    gap: 4,
+    height: 144,
+  },
+  banner: {
     flex: 1,
     overflow: "hidden",
-    justifyContent: "flex-end",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  optionCardLeft: {
-    borderTopLeftRadius: radius.sm,
-    borderBottomLeftRadius: radius.sm,
-    borderBottomRightRadius: radius.sm,
-  },
-  optionCardRight: {
-    borderTopLeftRadius: radius.sm,
-    borderTopRightRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  optionTextWrap: {
-    gap: spacing.xs,
-    alignItems: "flex-start",
-  },
-  optionLabel: {
-    fontFamily: fonts.dmSans,
-    fontSize: 18,
-    lineHeight: 22,
-    letterSpacing: -0.2,
-    textAlign: "left",
-  },
-  optionMeta: {
-    fontFamily: fonts.dmSans,
-    fontSize: 12,
-    opacity: 0.7,
-    textAlign: "left",
-  },
-  skipPill: {
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: K.border,
-    borderRadius: radius.full,
-    alignItems: "center",
-  },
-  skipLabel: {
-    fontFamily: fonts.dmSansMedium,
-    fontSize: 14,
-    color: K.sub,
-  },
-  ctaRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 16,
     justifyContent: "space-between",
   },
-  askEsterPill: {
+  surveyBanner: {
+    backgroundColor: K.blue,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 4,
+  },
+  scanBanner: {
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 64,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 24,
+  },
+  bannerTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: 7,
-    paddingHorizontal: 7,
-    paddingRight: 16,
-    borderRadius: radius.full,
-    borderWidth: 1,
+    gap: 2,
   },
-  askEsterAvatar: {
+  bannerKicker: {
+    fontFamily: fonts.dmSans,
+    fontSize: 12,
+    letterSpacing: -0.12,
+  },
+  bannerLabel: {
+    // Figma: Style/Sans serif (Catalogue), Title-3 20px, weight 400,
+    // line-height normal, letter-spacing -0.2.
+    fontFamily: fonts.catalogue,
+    fontSize: 20,
+    letterSpacing: -0.2,
+  },
+  scanBottom: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  scanArrow: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: K.brown,
+    borderRadius: 999,
     justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden",
-  },
-  askEsterAvatarLabel: {
-    fontFamily: fonts.dmSansBold,
-    fontSize: 15,
-    color: K.bone,
-  },
-  askEsterAvatarImage: {
-    width: "108%",
-    height: "108%",
-  },
-  askEsterLabel: {
-    fontFamily: fonts.dmSansMedium,
-    fontSize: 14,
-  },
-  arrowButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  arrowIcon: {
-    fontSize: 22,
-    fontWeight: "400",
   },
 });

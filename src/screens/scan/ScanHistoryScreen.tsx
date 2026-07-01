@@ -172,9 +172,19 @@ function surveyChips(s: SurveyHistoryItem): string[] {
   return chips;
 }
 
-// Secondary chip shown under each daily score.
+// Estimated days until ~100% confidence — mirrors ProfileScreen's clamped
+// formula (min 5, max 120) so a row lines up with the Profile confidence card.
+function daysToFullConfidence(confidence: number): number {
+  return Math.max(5, Math.min(120, 100 - Math.round(confidence)));
+}
+
+// Secondary chip shown under each daily score: days-to-full-confidence, matching
+// how confidence is surfaced elsewhere in the app (not a raw percentage).
 function scoreChips(s: ScoreDayItem): string[] {
-  return s.confidence != null ? [`Confidence ${Math.round(s.confidence)}%`] : [];
+  if (s.confidence == null) return [];
+  const pct = Math.round(s.confidence);
+  if (pct >= 100) return ["Full confidence"];
+  return [`${daysToFullConfidence(pct)} days til 100% confidence`];
 }
 
 export function ScanHistoryScreen() {

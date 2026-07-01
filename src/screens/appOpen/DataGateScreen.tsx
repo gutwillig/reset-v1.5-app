@@ -8,12 +8,13 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Svg, { Path } from "react-native-svg";
-import { K } from "../../constants/colors";
+import { K, toMetabolicType, type MetabolicType } from "../../constants/colors";
 import { fonts, spacing } from "../../constants/typography";
 import { getProfile } from "../../services/profile";
 import { getCheckInHistory } from "../../services/checkIn";
@@ -26,6 +27,16 @@ import type { AppOpenStackParamList } from "../../navigation/AppOpenNavigator";
 // version of the same warm tone in evening so it stays readable on the dark card.
 const MIDDLE_TEXT_DAY = "#7E6869";
 const MIDDLE_TEXT_EVENING = "#E6DCDC";
+
+// Per-type mascot hero. The user's metabolic type drives which gradient logo
+// bleeds off the card's top-left. (Ember's asset uses the "Restorer" name.)
+const TYPE_MASCOT: Record<MetabolicType, ReturnType<typeof require>> = {
+  Burner: require("../../../assets/images/type-mascots/Burner.png"),
+  Rebounder: require("../../../assets/images/type-mascots/Rebounder.png"),
+  Ember: require("../../../assets/images/type-mascots/Restorer.png"),
+  Chameleon: require("../../../assets/images/type-mascots/Chameleon.png"),
+  Explorer: require("../../../assets/images/type-mascots/Explorer.png"),
+};
 
 // Ester "typing" indicator — three pulsing dots shown while the message and
 // option cards animate in.
@@ -80,16 +91,19 @@ export function DataGateScreen() {
     useAppPalette();
   const { state: appState } = useApp();
 
-  const middleText = evening ? MIDDLE_TEXT_EVENING : MIDDLE_TEXT_DAY;
+  // Narrow phones (e.g. Galaxy S24, ~360dp) don't leave the scan label room to
+  // sit beside the arrow at the full 20px, so adjustsFontSizeToFit shrinks it
+  // and it ends up smaller than the survey label. On those screens, give the
+  // label the full card width (arrow overlaid) so both render at a matching
+  // fixed size. Wider phones (iPhone 16 Pro, ~393dp) keep the original layout.
+  const { width: screenWidth } = useWindowDimensions();
+  const isSmallScreen = screenWidth < 380;
 
-  // Reuse the app-open Greeting hero: the day/evening mascot shape, rotated to
-  // match the Figma render treatment. (Placeholder until per-type renders land.)
-  const mascotSource = evening
-    ? require("../../../assets/images/mascot-shape-bone.png")
-    : require("../../../assets/images/mascot-shape-ochre.png");
+  const middleText = evening ? MIDDLE_TEXT_EVENING : MIDDLE_TEXT_DAY;
 
   const [lastScanAt, setLastScanAt] = useState<string | null>(null);
   const [lastCheckInAt, setLastCheckInAt] = useState<string | null>(null);
+  const [primaryBucket, setPrimaryBucket] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -99,9 +113,16 @@ export function DataGateScreen() {
     ]).then(([profile, history]) => {
       setLastScanAt(profile?.layer3?.latestScan?.scannedAt ?? null);
       setLastCheckInAt(history[0]?.date ?? null);
+      setPrimaryBucket(profile?.layer1?.primaryBucket ?? null);
       setReady(true);
     });
   }, []);
+
+  const metabolicType: MetabolicType =
+    toMetabolicType(primaryBucket) ??
+    toMetabolicType(appState.user.metabolicType) ??
+    "Explorer";
+  const mascotSource = TYPE_MASCOT[metabolicType];
 
   const { isFresh } = useBiometricFreshness(lastScanAt, lastCheckInAt);
 
@@ -164,7 +185,7 @@ export function DataGateScreen() {
           <View style={styles.mascotWrap} pointerEvents="none">
             <Image
               source={mascotSource}
-              style={[styles.mascotImage, styles.mascotTransform]}
+              style={styles.mascotImage}
               resizeMode="contain"
             />
           </View>
@@ -211,7 +232,13 @@ export function DataGateScreen() {
                   <Text style={[styles.bannerKicker, { color: K.brown }]}>Quick option</Text>
                   <ArrowForward color={K.brown} size={14} />
                 </View>
-                <Text style={[styles.bannerLabel, { color: K.brown }]}>
+                <Text
+                  style={[
+                    styles.bannerLabel,
+                    isSmallScreen && styles.bannerLabelSmall,
+                    { color: K.brown },
+                  ]}
+                >
                   Do the survey instead today
                 </Text>
               </TouchableOpacity>
@@ -227,9 +254,14 @@ export function DataGateScreen() {
                 </View>
                 <View style={styles.scanBottom}>
                   <Text
-                    style={[styles.bannerLabel, { color: scanText, flex: 1 }]}
+                    style={[
+                      styles.bannerLabel,
+                      isSmallScreen && styles.bannerLabelSmall,
+                      styles.scanLabelFlex,
+                      { color: scanText },
+                    ]}
                     numberOfLines={2}
-                    adjustsFontSizeToFit
+                    adjustsFontSizeToFit={!isSmallScreen}
                   >
                     I'm ready to scan in
                   </Text>
@@ -278,10 +310,10 @@ const styles = StyleSheet.create({
   },
   mascotWrap: {
     position: "absolute",
-    top: -50,
-    left: -70,
-    width: 320,
-    height: 320,
+    top: -90,
+    left: -105,
+    width: 426,
+    height: 426,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -289,16 +321,12 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  mascotTransform: {
-    transform: [{ rotate: "-155.06deg" }, { scaleY: -1 }],
-  },
   cardBody: {
     flex: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: 260,
+    paddingTop: 330,
     paddingBottom: spacing.xl,
-    justifyContent: "flex-end",
-    gap: spacing.xl,
+    justifyContent: "space-between",
   },
   message: {
     gap: 6,
@@ -371,10 +399,20 @@ const styles = StyleSheet.create({
     fontSize: 20,
     letterSpacing: -0.2,
   },
+  bannerLabelSmall: {
+    // Narrow phones (e.g. S24, 360dp): the scan label has to share its row
+    // with the arrow, so 15px is the largest it fits in two lines. The survey
+    // label uses the same size so the two cards stay matched.
+    fontSize: 15,
+  },
+  // Wide screens: label sits beside the arrow and auto-shrinks to fit.
   scanBottom: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 6,
+  },
+  scanLabelFlex: {
+    flex: 1,
   },
   scanArrow: {
     width: 36,

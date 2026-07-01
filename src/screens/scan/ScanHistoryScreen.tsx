@@ -18,7 +18,9 @@ import { useAppPalette } from "../../hooks/useAppPalette";
 import {
   getScoreHistory,
   ScoreHistory,
-  ScoreHistoryMonth,
+  ScanHistoryItem,
+  SurveyHistoryItem,
+  ScoreDayItem,
 } from "../../services/profile";
 import { logEvent } from "../../services/braze";
 import type { MainStackParamList } from "../../navigation/MainNavigator";
@@ -35,7 +37,7 @@ const TYPE_GRADIENT_STOPS: Record<
   Explorer: { anchor: "#4A2A4F", mid: "#8A7060", outer: "#D8B247" },
 };
 
-type Tab = "scans" | "surveys";
+type Tab = "scores" | "scans" | "surveys";
 
 function BackIcon({ color }: { color: string }) {
   return (
@@ -67,13 +69,131 @@ function HeaderGradient({ type }: { type: MetabolicType }) {
   );
 }
 
+type MonthGroup<T> = { key: string; label: string; items: T[] };
+
+// Group by the user's LOCAL month/day (formatting happens off the raw `at`
+// timestamp so it matches the device timezone). Items arrive newest-first.
+function groupByLocalMonth<T extends { at: string }>(items: T[]): MonthGroup<T>[] {
+  const order: string[] = [];
+  const map = new Map<string, MonthGroup<T>>();
+  for (const it of items) {
+    const d = new Date(it.at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        label: d.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        items: [],
+      };
+      map.set(key, g);
+      order.push(key);
+    }
+    g.items.push(it);
+  }
+  return order.map((k) => map.get(k)!);
+}
+
+// Scores carry a bare `YYYY-MM-DD` (the user's local day). Parse the parts
+// directly — `new Date("2026-07-01")` is UTC midnight, which renders as the
+// previous day in negative-UTC timezones.
+function parseYMD(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+function groupScoreDaysByMonth(items: ScoreDayItem[]): MonthGroup<ScoreDayItem>[] {
+  const order: string[] = [];
+  const map = new Map<string, MonthGroup<ScoreDayItem>>();
+  for (const it of items) {
+    const d = parseYMD(it.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        label: d.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        items: [],
+      };
+      map.set(key, g);
+      order.push(key);
+    }
+    g.items.push(it);
+  }
+  return order.map((k) => map.get(k)!);
+}
+
+const fmtDay = (ymd: string) =>
+  parseYMD(ymd).toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+const fmtDate = (at: string) =>
+  new Date(at).toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+const fmtTime = (at: string) =>
+  new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const cap = (s: string | null) =>
+  s ? s.charAt(0).toUpperCase() + s.slice(1) : "—";
+const numText = (v: number | null, digits = 0) =>
+  v == null ? "—" : v.toFixed(digits);
+
+function Chip({ label, bg, color }: { label: string; bg: string; color: string }) {
+  return (
+    <View style={[styles.chip, { backgroundColor: bg }]}>
+      <Text style={[styles.chipText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+// Signal chips shown under each scan (nulls dropped so we never render "—").
+function scanChips(s: ScanHistoryItem): string[] {
+  const chips: string[] = [];
+  if (s.heartRate != null) chips.push(`HR ${Math.round(s.heartRate)}`);
+  if (s.hrvSdnn != null) chips.push(`HRV ${Math.round(s.hrvSdnn)}ms`);
+  if (s.breathingRate != null) chips.push(`Br ${Math.round(s.breathingRate)}/min`);
+  if (s.stressIndex != null) chips.push(`Stress ${Math.round(s.stressIndex)}`);
+  return chips;
+}
+
+// Answer chips shown under each survey.
+function surveyChips(s: SurveyHistoryItem): string[] {
+  const chips: string[] = [];
+  const sleepParts: string[] = [];
+  if (s.sleepQuality) sleepParts.push(cap(s.sleepQuality));
+  if (s.sleepHours != null) sleepParts.push(`${s.sleepHours}h`);
+  if (sleepParts.length) chips.push(`Sleep: ${sleepParts.join(" ")}`);
+  const tags = s.stressTags ?? [];
+  if (tags.length) chips.push(`Stress: ${tags.map(cap).join(", ")}`);
+  return chips;
+}
+
+// Estimated days until ~100% confidence — mirrors ProfileScreen's clamped
+// formula (min 5, max 120) so a row lines up with the Profile confidence card.
+function daysToFullConfidence(confidence: number): number {
+  return Math.max(5, Math.min(120, 100 - Math.round(confidence)));
+}
+
+// Secondary chip shown under each daily score: days-to-full-confidence, matching
+// how confidence is surfaced elsewhere in the app (not a raw percentage).
+function scoreChips(s: ScoreDayItem): string[] {
+  if (s.confidence == null) return [];
+  const pct = Math.round(s.confidence);
+  if (pct >= 100) return ["Full confidence"];
+  return [`${daysToFullConfidence(pct)} days til 100% confidence`];
+}
+
 export function ScanHistoryScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const insets = useSafeAreaInsets();
   const { state } = useApp();
   const { evening } = useAppPalette();
-  const [tab, setTab] = useState<Tab>("scans");
+  const [tab, setTab] = useState<Tab>("scores");
 
   // Day/evening theming — mirrors the StatDetailSheet tooltip tokens so the
   // Score History body matches the rest of RES-145. The gradient header stays
@@ -97,7 +217,7 @@ export function ScanHistoryScreen() {
         if (alive) setHistory(h);
       })
       .catch(() => {
-        if (alive) setHistory({ scans: [], surveys: [] });
+        if (alive) setHistory({ scans: [], surveys: [], scores: [] });
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -107,12 +227,24 @@ export function ScanHistoryScreen() {
     };
   }, []);
 
-  const groups: ScoreHistoryMonth[] = useMemo(
-    () => (tab === "scans" ? (history?.scans ?? []) : (history?.surveys ?? [])),
-    [tab, history],
+  const scanGroups = useMemo(
+    () => groupByLocalMonth(history?.scans ?? []),
+    [history],
   );
+  const surveyGroups = useMemo(
+    () => groupByLocalMonth(history?.surveys ?? []),
+    [history],
+  );
+  const scoreGroups = useMemo(
+    () => groupScoreDaysByMonth(history?.scores ?? []),
+    [history],
+  );
+  const groups =
+    tab === "scans" ? scanGroups : tab === "surveys" ? surveyGroups : scoreGroups;
+  const noun = tab === "scans" ? "scan" : tab === "surveys" ? "survey" : "score";
 
-  const noun = tab === "scans" ? "scan" : "survey";
+  const chipBg = evening ? "rgba(255,255,255,0.10)" : "rgba(54,20,22,0.06)";
+  const chipText = textSubtle;
 
   return (
     <View style={[styles.container, { backgroundColor: screenBg }]}>
@@ -133,7 +265,7 @@ export function ScanHistoryScreen() {
 
         {/* Segmented toggle */}
         <View style={styles.toggle}>
-          {(["scans", "surveys"] as Tab[]).map((t) => {
+          {(["scores", "scans", "surveys"] as Tab[]).map((t) => {
             const active = tab === t;
             return (
               <TouchableOpacity
@@ -148,7 +280,7 @@ export function ScanHistoryScreen() {
                     { color: active ? K.brown : K.white },
                   ]}
                 >
-                  {t === "scans" ? "Scans" : "Surveys"}
+                  {t === "scores" ? "Scores" : t === "scans" ? "Scans" : "Surveys"}
                 </Text>
               </TouchableOpacity>
             );
@@ -169,7 +301,9 @@ export function ScanHistoryScreen() {
           <Text style={[styles.emptyBody, { color: textSubtle }]}>
             {tab === "scans"
               ? "Your face scans will show up here once you start scanning."
-              : "Your daily check-ins will show up here once you start logging."}
+              : tab === "surveys"
+                ? "Your daily check-ins will show up here once you start logging."
+                : "Your daily scores will show up here once you start scanning or checking in."}
           </Text>
         </View>
       ) : (
@@ -181,36 +315,78 @@ export function ScanHistoryScreen() {
           ]}
         >
           {groups.map((group) => (
-            <View key={group.monthKey} style={styles.monthBlock}>
+            <View key={group.key} style={styles.monthBlock}>
               <View style={styles.monthHead}>
                 <Text style={[styles.monthName, { color: textStrong }]}>
-                  {group.month}
+                  {group.label}
                 </Text>
                 <Text style={[styles.monthCount, { color: textSubtle }]}>
-                  {group.count} {noun}
-                  {group.count === 1 ? "" : "s"}
+                  {group.items.length} {noun}
+                  {group.items.length === 1 ? "" : "s"}
                 </Text>
               </View>
               <View style={[styles.card, { borderColor: cardBorder }]}>
-                {group.entries.map((entry, i) => (
-                  <View key={entry.date}>
-                    {i > 0 ? (
-                      <View
-                        style={[styles.divider, { backgroundColor: rowDivider }]}
-                      />
-                    ) : null}
-                    <View style={styles.row}>
-                      <Text style={[styles.rowDate, { color: textStrong }]}>
-                        {entry.label}
-                      </Text>
-                      <View style={styles.scorePill}>
-                        <Text style={[styles.scoreText, { color: textStrong }]}>
-                          {entry.score}
-                        </Text>
+                {group.items.map((item, i) => {
+                  const isScore = tab === "scores";
+                  const scan = item as ScanHistoryItem;
+                  const survey = item as SurveyHistoryItem;
+                  const score = item as ScoreDayItem;
+                  const key = isScore ? score.date : (item as { at: string }).at;
+                  const chips =
+                    tab === "scans"
+                      ? scanChips(scan)
+                      : tab === "surveys"
+                        ? surveyChips(survey)
+                        : scoreChips(score);
+                  return (
+                    <View key={key}>
+                      {i > 0 ? (
+                        <View
+                          style={[styles.divider, { backgroundColor: rowDivider }]}
+                        />
+                      ) : null}
+                      <View style={styles.row}>
+                        <View style={styles.rowMain}>
+                          <Text style={[styles.rowDate, { color: textStrong }]}>
+                            {isScore ? fmtDay(score.date) : fmtDate(scan.at)}
+                          </Text>
+                          {!isScore ? (
+                            <Text style={[styles.rowTime, { color: textSubtle }]}>
+                              {fmtTime(scan.at)}
+                            </Text>
+                          ) : null}
+                          {chips.length ? (
+                            <View style={styles.chipsRow}>
+                              {chips.map((c, ci) => (
+                                <Chip key={ci} label={c} bg={chipBg} color={chipText} />
+                              ))}
+                            </View>
+                          ) : null}
+                        </View>
+                        <View style={styles.headlineWrap}>
+                          {tab === "surveys" ? (
+                            <Text style={[styles.headlineWord, { color: textStrong }]}>
+                              {cap(survey.energy)}
+                            </Text>
+                          ) : (
+                            <Text style={[styles.headlineNum, { color: textStrong }]}>
+                              {tab === "scans"
+                                ? numText(scan.wellness)
+                                : String(score.score)}
+                            </Text>
+                          )}
+                          <Text style={[styles.headlineLabel, { color: textSubtle }]}>
+                            {tab === "scans"
+                              ? "Wellness"
+                              : tab === "surveys"
+                                ? "Energy"
+                                : "Score"}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </View>
           ))}
@@ -304,21 +480,60 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
     paddingVertical: 14,
   },
+  rowMain: {
+    flex: 1,
+    gap: 6,
+  },
   rowDate: {
-    fontFamily: fonts.dmSans,
+    fontFamily: fonts.dmSansMedium,
     fontSize: 15,
   },
-  scorePill: {
-    minWidth: 40,
+  rowTime: {
+    fontFamily: fonts.dmSans,
+    fontSize: 12,
+    marginTop: -2,
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 2,
+  },
+  chip: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  chipText: {
+    fontFamily: fonts.dmSans,
+    fontSize: 12,
+    letterSpacing: -0.12,
+  },
+  headlineWrap: {
+    minWidth: 64,
     alignItems: "center",
     justifyContent: "center",
   },
-  scoreText: {
+  headlineNum: {
     fontFamily: fonts.quadrant,
-    fontSize: 24,
+    fontSize: 28,
     textAlign: "center",
-    letterSpacing: -0.24,
+    letterSpacing: -0.28,
+  },
+  headlineWord: {
+    fontFamily: fonts.catalogue,
+    fontSize: 20,
+    textAlign: "center",
+    letterSpacing: -0.2,
+  },
+  headlineLabel: {
+    fontFamily: fonts.dmSans,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
 });

@@ -165,22 +165,33 @@ export async function getProfileInsight(
   );
 }
 
-export interface ScoreHistoryEntry {
-  date: string; // YYYY-MM-DD
-  label: string; // "May 8, 2026"
-  score: number; // 0-100
+export interface ScanHistoryItem {
+  at: string; // ISO timestamp (formatted client-side in local TZ)
+  wellness: number | null;
+  heartRate: number | null;
+  hrvSdnn: number | null;
+  breathingRate: number | null;
+  stressIndex: number | null;
 }
 
-export interface ScoreHistoryMonth {
-  monthKey: string; // "2026-05"
-  month: string; // "May 2026"
-  count: number;
-  entries: ScoreHistoryEntry[];
+export interface SurveyHistoryItem {
+  at: string; // ISO timestamp
+  energy: string | null;
+  sleepQuality: string | null;
+  sleepHours: number | null;
+  stressTags: string[];
+}
+
+export interface ScoreDayItem {
+  date: string; // YYYY-MM-DD (the user's local day)
+  score: number; // Daily Reset Score (0-100)
+  confidence: number | null; // Composite confidence when calculated
 }
 
 export interface ScoreHistory {
-  scans: ScoreHistoryMonth[];
-  surveys: ScoreHistoryMonth[];
+  scans: ScanHistoryItem[]; // newest first
+  surveys: SurveyHistoryItem[]; // newest first
+  scores: ScoreDayItem[]; // one per day, newest first
 }
 
 export async function getScoreHistory(): Promise<ScoreHistory> {

@@ -80,12 +80,28 @@ export interface DailyPlanMeal {
   cuisineCluster?: string;
 }
 
+// RES-166 (Route B): attribution for a check-in-driven meal change.
+export interface CheckInChangeItem {
+  slot: "breakfast" | "lunch" | "dinner";
+  mealId: string;
+  mealName: string;
+  signal: "stress" | "sleep" | "energy";
+  reason: string;
+}
+
+export interface CheckInChange {
+  changed: boolean;
+  changes: CheckInChangeItem[];
+}
+
 export interface SignalAdjustments {
   stress: boolean;
   sleep: boolean;
   energy: boolean;
   recentlyScanned: boolean;
   recentlySurveyed: boolean;
+  // Present only when applyCheckIn actually moved a meal (else omitted).
+  checkInChange?: CheckInChange;
 }
 
 export interface DailyPlan {
@@ -115,6 +131,15 @@ export async function getDailyPlan(date?: string): Promise<DailyPlan> {
 
 export async function refreshDailyPlan(): Promise<DailyPlan> {
   return apiClient<DailyPlan>("/api/meals/daily-plan/refresh", {
+    method: "POST",
+  });
+}
+
+// RES-166 (Route B): re-tune today's plan to the just-submitted check-in.
+// Any meal change is caused by the check-in (deterministic regen, not a random
+// reshuffle) and comes back described in signalAdjustments.checkInChange.
+export async function applyCheckInToPlan(): Promise<DailyPlan> {
+  return apiClient<DailyPlan>("/api/meals/daily-plan/apply-check-in", {
     method: "POST",
   });
 }

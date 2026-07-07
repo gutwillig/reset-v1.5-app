@@ -11,7 +11,7 @@ import { useNavigation, CommonActions } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { K } from "../../constants/colors";
 import { submitCheckIn } from "../../services/checkIn";
-import { refreshDailyPlan, cacheDailyPlan } from "../../services/meals";
+import { applyCheckInToPlan, cacheDailyPlan } from "../../services/meals";
 import { getProfile } from "../../services/profile";
 import { useApp } from "../../context/AppContext";
 import { SurveyHeader } from "../../components/survey/SurveyHeader";
@@ -128,10 +128,11 @@ export function AppOpenSurveyV2Screen() {
         sleepHours,
         sleepQuality: sleepQuality ?? undefined,
       });
-      // Survey is fresh signal — rotate today's recipes so the user sees a
-      // change when they land back on Home (RES-112). Fire-and-forget; we
-      // don't want to block navigation on a meal-engine call.
-      refreshDailyPlan()
+      // Survey is fresh signal — re-tune today's plan to it (RES-166 Route B).
+      // Unlike the old refreshDailyPlan() random reshuffle, this only changes a
+      // meal when the check-in itself drives it, and returns WHY so Home/NextMeal
+      // can say so truthfully. Fire-and-forget; don't block navigation on it.
+      applyCheckInToPlan()
         .then((plan) => cacheDailyPlan(plan))
         .catch(() => {});
     } catch {

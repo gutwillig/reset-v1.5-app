@@ -417,6 +417,29 @@ export function NextMealScreen() {
   // True while the LLM blurb is still loading (no result yet, no error) — show
   // the typing indicator instead of the short template line.
   const whyPending = !!meal && !esterWhy && !whyError;
+  const heading = headingFor(fromOnboarding, hasScore);
+  // RES-166 (Route B): if the just-submitted check-in actually moved this meal,
+  // the backend attached the reason. Prefer the change for the slot on screen;
+  // else fall back to the first change. Absent when nothing moved. We fold it in
+  // as a bold lead sentence on the "Why this meal?" paragraph rather than a
+  // separate banner, so it explains the change without stealing screen height.
+  const checkInChange = plan?.signalAdjustments?.checkInChange;
+  const checkInReason = checkInChange?.changed
+    ? (checkInChange.changes.find((c) => c.slot === slot)?.reason ??
+      checkInChange.changes[0]?.reason ??
+      null)
+    : null;
+  // "Based on your check-in, {reason}." bolded, prepended to the why blurb. The
+  // reason strings already start mid-sentence ("you flagged stress — …"), so the
+  // capitalised lead reads naturally.
+  const whyLead = checkInReason ? `Based on your check-in, ${checkInReason}.` : "";
+  // The blurb the bubble shows: bold lead (when a change happened) + the LLM/why
+  // copy. renderBoldSegments turns the **…** into a bold span.
+  const whyBody = whyLead
+    ? whyMessage
+      ? `**${whyLead}** ${whyMessage}`
+      : `**${whyLead}**`
+    : whyMessage;
   // Cap the why-bubble text height so a long blurb scrolls in place instead of
   // shoving the chips past the bottom edge. Grows to fit short copy, scrolls
   // beyond the leftover space on a given device.
@@ -424,7 +447,6 @@ export function NextMealScreen() {
     72,
     SCREEN_H - insets.top - insets.bottom - WHY_RESERVED_H,
   );
-  const heading = headingFor(fromOnboarding, hasScore);
   // Chat-bubble surface — brown-tinted ghost on light themes, bone-tinted on dark.
   const chipBg = evening ? "rgba(243,239,227,0.14)" : "rgba(54,20,22,0.12)";
   // Sheet surface = Figma page-surface-alt (#F3EFE3 / K.bone) on light themes;
@@ -563,8 +585,11 @@ export function NextMealScreen() {
                   </View>
                 </View>
 
-                {/* Why this meal — eyebrow + explanation bubble. */}
-                {whyMessage || whyPending ? (
+                {/* Why this meal — eyebrow + explanation bubble. The RES-166
+                    check-in reason (whyLead) is folded in as a bold lead sentence
+                    on this paragraph; it shows immediately even while the LLM
+                    blurb is still typing. */}
+                {whyBody || whyPending ? (
                   <View style={styles.whyWrap}>
                     <View style={styles.eyebrowRow}>
                       <View style={styles.eyebrowDot} />
@@ -574,7 +599,16 @@ export function NextMealScreen() {
                     </View>
                     <View style={styles.whyBubble}>
                       {whyPending ? (
-                        <WhyTypingDots color={subtleText} />
+                        <>
+                          {whyLead ? (
+                            <Text
+                              style={[styles.whyText, { color: subtleText }]}
+                            >
+                              {renderBoldSegments(`**${whyLead}**`, textColor)}
+                            </Text>
+                          ) : null}
+                          <WhyTypingDots color={subtleText} />
+                        </>
                       ) : (
                         <WhyScroll
                           maxHeight={whyMaxHeight}
@@ -586,7 +620,7 @@ export function NextMealScreen() {
                           }
                         >
                           <Text style={[styles.whyText, { color: subtleText }]}>
-                            {renderBoldSegments(whyMessage, textColor)}
+                            {renderBoldSegments(whyBody, textColor)}
                           </Text>
                         </WhyScroll>
                       )}

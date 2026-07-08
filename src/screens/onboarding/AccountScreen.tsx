@@ -364,6 +364,12 @@ export function AccountScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {isLoading && (
+        <View style={styles.loadingOverlay} pointerEvents="auto">
+          <ActivityIndicator size="large" color={K.white} />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -372,6 +378,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: K.cream,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 100,
   },
   keyboardView: {
     flex: 1,

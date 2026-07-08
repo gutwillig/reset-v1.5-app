@@ -349,6 +349,12 @@ export function AccountGateScreen({ navigation }: Props) {
           </View>
         </View>
       </SafeAreaView>
+
+      {isLoading && (
+        <View style={styles.loadingOverlay} pointerEvents="auto">
+          <ActivityIndicator size="large" color={WHITE} />
+        </View>
+      )}
     </View>
   );
 }
@@ -356,6 +362,13 @@ export function AccountGateScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: MAROON },
   safe: { flex: 1 },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 100,
+  },
   topBar: {
     flexDirection: "row",
     alignItems: "center",

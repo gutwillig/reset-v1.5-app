@@ -355,6 +355,12 @@ export function LoginScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {isLoading && (
+        <View style={styles.loadingOverlay} pointerEvents="auto">
+          <ActivityIndicator size="large" color={WHITE} />
+        </View>
+      )}
     </View>
   );
 }
@@ -363,6 +369,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: MAROON },
   safe: { flex: 1 },
   keyboardView: { flex: 1 },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 100,
+  },
 
   // Faded background logo
   bgLogo: {

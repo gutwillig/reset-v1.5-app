@@ -11,6 +11,7 @@ import {
   setOperatingMode,
   setCameraMode,
   setCustomMeasurementConfig,
+  setRecordingEnabled,
   OperatingMode,
   MeasurementPreset,
   PrecisionMode,
@@ -195,14 +196,20 @@ export async function initShenAI(
       : MeasurementPreset.THIRTY_SECONDS_ALL_METRICS,
     precisionMode: PrecisionMode.RELAXED,
     cameraMode: CameraMode.FACING_USER,
-    // RES-133: SDK 3.x defaults to "on-demand server models" — the model
-    // files are fetched to the device, then inference runs locally. We use
-    // that default path because forcing `offlineProcessing: true` pushed the
-    // scan onto a heavier fully-local path that the device couldn't keep up
-    // with in real time, degrading signal quality and making scans hard to
-    // complete (build 44). TODO: confirm with MX Labs that this default does
-    // not upload biometric/face data before relying on it for the App Store
-    // privacy declaration.
+    // RES-133 / App Store privacy declaration: SDK 3.x defaults to
+    // "on-demand server models" — model files download to the device, then
+    // inference runs LOCALLY. MX Labs (Liliana, 2026-06-03) confirmed in
+    // writing: with offlineProcessing unset/false, the SDK does NOT send
+    // camera frames, face imagery, or PPG/biometric signal to Shen.AI servers
+    // for measurement — the pipeline runs on-device. (offlineProcessing:true
+    // is NOT server-vs-local; it's a heavier lockstep mode that degraded
+    // real-time scans on iPhone in build 44, so we stay on the default.)
+    // Conditions MX Labs gave for "no biometric image/video leaves the
+    // device," which we satisfy: models pre-available before scan; measurement
+    // recording disabled (see setRecordingEnabled(false) below); dashboard off.
+    // ⚠️ One residual is license-level, not code: MX Labs must confirm our
+    // specific license does not enable cropped-frame / image-bearing
+    // diagnostic telemetry.
     // SDK 3.x introduced UI V2/V3. Pin V1 to preserve the 2.11.6 scan UX
     // (face-positioning overlay only, our own React UI layered on top).
     uiVersion: UiVersion.V1,
@@ -251,6 +258,13 @@ export async function initShenAI(
   if (result !== 0) {
     throw new Error(`Shen AI init failed: code ${result}`);
   }
+
+  // Explicitly disable measurement recording so no scan video/frames are ever
+  // captured — a condition MX Labs gave for guaranteeing no biometric
+  // image/video leaves the device, and the basis of our App Store privacy
+  // declaration. We never enable recording, but we assert it defensively
+  // rather than rely on the SDK default.
+  await setRecordingEnabled(false);
 
   // iOS only — see USE_CUSTOM_PRESET note above (Android's bridge crashes on
   // this config). Only takes effect because the preset is CUSTOM.

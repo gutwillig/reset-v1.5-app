@@ -220,6 +220,18 @@ export function EducationCarouselScreen({ navigation }: Props) {
     logEvent("onboarding_education");
   }, []);
 
+  // Education stays mounted once PreScan is pushed on top of it, so without
+  // this the loop keeps decoding behind the whole scan flow. Run it only while
+  // the screen is actually on-screen.
+  useEffect(() => {
+    const blurUnsub = navigation.addListener("blur", () => introPlayer.pause());
+    const focusUnsub = navigation.addListener("focus", () => introPlayer.play());
+    return () => {
+      blurUnsub();
+      focusUnsub();
+    };
+  }, [navigation, introPlayer]);
+
   // When we navigate to PreScan, snap the ScrollView back to slide 4 on `blur`
   // (PreScan is now on top so the snap is invisible). Defer to the next frame
   // and avoid setState here — a re-render of Education during the transition

@@ -22,6 +22,7 @@ import { getProfile, UserProfile } from "../../services/profile";
 import { getCheckInHistory, type CheckInEntry } from "../../services/checkIn";
 import { useBiometricFreshness } from "../../hooks/useBiometricFreshness";
 import { useAppPalette } from "../../hooks/useAppPalette";
+import { useAiConsentGate } from "../../hooks/useAiConsentGate";
 import { logEvent, setCustomAttribute } from "../../services/braze";
 import { StatDetailSheet, StatDetailData } from "./StatDetailSheet";
 import {
@@ -163,6 +164,7 @@ function isSameLocalDay(iso: string | null | undefined, now: Date): boolean {
 export function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const { state, resetState } = useApp();
+  const { runWithAiConsent } = useAiConsentGate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [checkInHistory, setCheckInHistory] = useState<CheckInEntry[]>([]);
   const insets = useSafeAreaInsets();
@@ -414,7 +416,9 @@ export function ProfileScreen() {
     label?: string | null;
   }) => {
     setDetail(null);
-    navigation.navigate("EsterChat", { context: "general", topic });
+    runWithAiConsent(() =>
+      navigation.navigate("EsterChat", { context: "general", topic }),
+    );
   };
   const goScanHistory = () => {
     logEvent("profile_scanHistoryCTA");
@@ -660,7 +664,9 @@ export function ProfileScreen() {
                 onPress={() =>
                   hasScan
                     ? navigation.navigate("Scan", { mode: "rescan" })
-                    : navigation.navigate("EsterChat", { context: "general" })
+                    : runWithAiConsent(() =>
+                        navigation.navigate("EsterChat", { context: "general" }),
+                      )
                 }
               >
                 <Text style={[styles.staleNudgeTitle, { color: surfaces.textStrong }]}>

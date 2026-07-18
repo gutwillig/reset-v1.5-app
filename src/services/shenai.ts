@@ -352,8 +352,35 @@ const MEASUREMENT_STATE_MAP: Record<number, MeasurementState> = {
   [SdkMeasurementState.FAILED]: "FAILED",
 };
 
+// [ShenAI-DIAG] TEMPORARY — reverse-map the raw SDK state enum → its name so we
+// can log FINALIZING vs FINISHED explicitly (our public mapping collapses
+// FINALIZING into "RUNNING"). Remove once the MX Labs finalization issue is
+// resolved. See the scan-completion thread with Antoni.
+const SDK_STATE_NAME: Record<number, string> = {
+  [SdkMeasurementState.NOT_STARTED]: "NOT_STARTED",
+  [SdkMeasurementState.WAITING_FOR_FACE]: "WAITING_FOR_FACE",
+  [SdkMeasurementState.RUNNING_SIGNAL_SHORT]: "RUNNING_SIGNAL_SHORT",
+  [SdkMeasurementState.RUNNING_SIGNAL_GOOD]: "RUNNING_SIGNAL_GOOD",
+  [SdkMeasurementState.RUNNING_SIGNAL_BAD]: "RUNNING_SIGNAL_BAD",
+  [SdkMeasurementState.RUNNING_SIGNAL_BAD_DEVICE_UNSTABLE]:
+    "RUNNING_SIGNAL_BAD_DEVICE_UNSTABLE",
+  [SdkMeasurementState.FINALIZING]: "FINALIZING",
+  [SdkMeasurementState.FINISHED]: "FINISHED",
+  [SdkMeasurementState.FAILED]: "FAILED",
+};
+
 export async function getMeasureState(): Promise<MeasurementState> {
   const state = await getMeasurementState();
+  // [ShenAI-DIAG] TEMPORARY — trace the raw finalization state + progress each
+  // poll tick so we can capture exactly what getMeasurementState() returns at
+  // 100% (does it reach FINISHED, or stall in FINALIZING?). Remove after the
+  // vendor issue is closed.
+  try {
+    const pct = await getMeasurementProgressPercentage();
+    console.log(
+      `[ShenAI-DIAG] t=${Date.now()} state=${SDK_STATE_NAME[state] ?? "UNKNOWN"}(${state}) progress=${pct}`,
+    );
+  } catch {}
   return MEASUREMENT_STATE_MAP[state] ?? "NOT_STARTED";
 }
 

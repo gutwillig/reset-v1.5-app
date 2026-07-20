@@ -238,9 +238,13 @@ export async function initShenAI(
     // ⚠️ One residual is license-level, not code: MX Labs must confirm our
     // specific license does not enable cropped-frame / image-bearing
     // diagnostic telemetry.
-    // SDK 3.x introduced UI V2/V3. Pin V1 to preserve the 2.11.6 scan UX
-    // (face-positioning overlay only, our own React UI layered on top).
-    uiVersion: UiVersion.V1,
+    // SDK 3.x UI version. Moved V1 → V3 (Bryan/Alex): V3 is ShenAI's
+    // general-wellness UI layout (per MX Labs' 1.4.1 guidance). Completion
+    // verified on a Galaxy S24 — V3 auto-advances FINALIZING → FINISHED with
+    // showResultsFinishButton/enableSummaryScreen disabled (the July-2026 stall
+    // no longer reproduces). ⚠️ Re-verify on a physical iPhone that the iOS
+    // CUSTOM preset still hides BP/stress under V3 before shipping (Apple 1.4.1).
+    uiVersion: UiVersion.V3,
     showUserInterface: true,
     showFacePositioningOverlay: true,
     // Red low-signal indicator so the user knows to hold still / fix lighting.

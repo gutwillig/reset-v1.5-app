@@ -595,12 +595,33 @@ export function AppProvider({ children }: AppProviderProps) {
         }
       })
       .catch(() => {});
+    // RES-188 — hydrate third-party-AI consent for the user we just signed in
+    // as, mirroring the session-restore path. Without this an in-session
+    // account switch would carry the prior user's consent flag (clearAuth now
+    // resets it to the fail-safe default, so a failure here leaves AI off).
+    getAiConsent()
+      .then(({ consent, needsPrompt }) => {
+        dispatch({
+          type: "SET_AI_CONSENT",
+          payload: { granted: consent?.status === "granted", needsPrompt },
+        });
+      })
+      .catch(() => {});
   };
 
   const clearAuth = () => {
     dispatch({
       type: "SET_AUTH",
       payload: { isAuthenticated: false, authUser: null },
+    });
+    // RES-188 — reset third-party-AI consent to the fail-safe "not granted,
+    // needs prompt" default so the previous user's grant never leaks into the
+    // next account. setAuth re-hydrates the real value from the backend on the
+    // next sign-in; if that fetch fails we stay fail-safe (nudge shown, no AI
+    // call) rather than fail-open.
+    dispatch({
+      type: "SET_AI_CONSENT",
+      payload: { granted: false, needsPrompt: true },
     });
     // Drop the RevenueCat identity so the next user starts clean.
     logoutRevenueCat();
